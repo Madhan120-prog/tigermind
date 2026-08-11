@@ -1,4 +1,4 @@
-# Domain Research: housing
+# Domain Research: exams-deadlines
 
 > Phase 0 deliverable per PLAN.md Section 13. Fill in before writing any
 > ingestion code for this domain.

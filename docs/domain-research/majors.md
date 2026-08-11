@@ -1,6 +1,6 @@
 # Domain Research: majors
 
-> Phase 0 deliverable per PLAN.md Section 8. Fill in before writing any
+> Phase 0 deliverable per PLAN.md Section 13. Fill in before writing any
 > ingestion code for this domain.
 
 ## Source

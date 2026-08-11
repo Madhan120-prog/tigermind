@@ -1,4 +1,4 @@
-# Domain Research: housing
+# Domain Research: course-catalog
 
 > Phase 0 deliverable per PLAN.md Section 13. Fill in before writing any
 > ingestion code for this domain.
