@@ -209,6 +209,18 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
   refactoring in anticipation of it.
 - No comments explaining *what* code does — only the non-obvious *why*
   (e.g., why drop/add must go through `interrupt()`).
+- **No hardcoding — config/data over code branches.** Anything that
+  differs per domain (source URLs, retrieval mode, prompt snippet,
+  freshness tier) lives in `backend/app/config/domains.yaml`, never as a
+  literal baked into Python logic. This includes per-department Faculty
+  source URLs and per-domain eval expectations — they're config *data*,
+  not hardcoded control flow, so adding one is an edit to a file a
+  non-engineer could read, not a code change.
+- **Minimize dependencies.** Before adding a new package, check whether
+  something already in `PLAN.md` §11's stack covers the need. Don't add a
+  second HTTP client, a second PDF library, etc. `playwright` is the
+  running example: flagged as conditional on Events' ingestion spike,
+  not added speculatively just because it might be needed.
 
 ---
 
@@ -226,6 +238,22 @@ Full reasoning per choice lives in `CLAUDE.md`. Summary:
 | Mock SIS (Phase 6) | FastAPI + SQLite + JWT auth |
 | Frontend | React (reused chat component) |
 | Reproducibility | Docker Compose, pinned deps, GitHub Actions eval gate |
+
+### Ingestion / parsing (added after Phase 0 findings)
+
+Phase 0 research used an AI-summarizing fetch tool — fine for reconnaissance,
+wrong for ingestion. The actual ingestion pipeline must hit raw HTML/PDF with
+a deterministic parser, never an LLM paraphrase of the source page, or the
+"ground truth" chunks going into Chroma are already a lossy model
+interpretation — quietly undermining the citation-grounded premise the
+guardrails design depends on.
+
+| Addition | For |
+|---|---|
+| `httpx` | Deterministic HTTP fetching for ingestion (all 8 Tier-1 domains) |
+| `beautifulsoup4` | HTML parsing |
+| `pdfplumber` | PDF table extraction — confirmed needed for Fees (rate schedules are PDF-only), possibly Course Catalog if it offers a bulk PDF export |
+| `playwright` *(conditional — don't add until confirmed needed)* | Only if Events' Phase 1/2 spike finds no iCal feed or JSON API behind `/calendar/` and a headless render is the only option. Prefer iCal → JSON API → Playwright, in that order, per the Engineering Conventions rule against premature dependencies |
 
 ---
 

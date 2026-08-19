@@ -15,7 +15,10 @@
   template for this project specifically.
 
 ## PRs / merge
-- Open a PR per phase branch. Self-review the diff before merging.
+- Open a PR per phase branch. The user is the sole collaborator on this
+  repo and performs every merge themselves — Claude Code opens the PR and
+  stops there, never runs `gh pr merge` or merges via the GitHub UI.
+- Self-review the diff before merging.
 - A phase's eval subset (`eval/eval_set.csv`) must pass before merge — once
   Phase 5 CI is wired up (`PLAN.md` Section 9), this is enforced by GitHub
   Actions rather than manual discipline.
