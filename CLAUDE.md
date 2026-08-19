@@ -30,7 +30,17 @@ read the relevant phase section there before starting work.
 - Follow `.claude/rules/git-workflow.md` for branching, commits, and PRs —
   one branch per phase, conventional commit messages, no direct pushes to
   `main`. Commits are authored solely by the user — no AI co-author
-  trailer, ever, in this repo.
+  trailer, ever, in this repo. The user is the only collaborator and
+  performs every merge themselves — Claude Code opens PRs, never merges
+  them.
+- **No hardcoding, minimize dependencies.** See `PLAN.md` Section 10 and
+  `.claude/rules/architecture.md` — domain differences belong in
+  `backend/app/config/domains.yaml`, not code branches; don't add a
+  package that overlaps with something already in the stack.
+- **After every commit, explain what changed in plain language.** The
+  user is learning this stack as the project goes and is not yet
+  proficient in it — skip jargon-dense summaries, explain what the change
+  does and why in terms a newer engineer can follow.
 
 ## Stack
 - **Backend: FastAPI** — async-native (matters for concurrent LLM/retrieval

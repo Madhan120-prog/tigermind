@@ -40,3 +40,15 @@ reference while implementing.
   Employment, Majors process text.
 - Hybrid: Course Catalog only (course-code queries → structured; "how do
   I withdraw" → semantic).
+
+## No hardcoding — config/data over code branches
+
+- Anything that differs per domain (source URLs, retrieval mode, prompt
+  snippet, freshness tier) lives in `backend/app/config/domains.yaml`,
+  never as a literal inside Python logic. This includes Faculty's
+  per-department source URLs — that's config *data*, not a hardcoded
+  branch, so adding one is a file edit, not a code change.
+- Before adding a new dependency, check `PLAN.md` §11 first — don't add a
+  second library that overlaps with one already chosen. `playwright` is
+  the running example: conditional on the Events ingestion spike, not
+  added just in case.

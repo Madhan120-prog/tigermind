@@ -209,6 +209,18 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
   refactoring in anticipation of it.
 - No comments explaining *what* code does — only the non-obvious *why*
   (e.g., why drop/add must go through `interrupt()`).
+- **No hardcoding — config/data over code branches.** Anything that
+  differs per domain (source URLs, retrieval mode, prompt snippet,
+  freshness tier) lives in `backend/app/config/domains.yaml`, never as a
+  literal baked into Python logic. This includes per-department Faculty
+  source URLs and per-domain eval expectations — they're config *data*,
+  not hardcoded control flow, so adding one is an edit to a file a
+  non-engineer could read, not a code change.
+- **Minimize dependencies.** Before adding a new package, check whether
+  something already in `PLAN.md` §11's stack covers the need. Don't add a
+  second HTTP client, a second PDF library, etc. `playwright` is the
+  running example: flagged as conditional on Events' ingestion spike,
+  not added speculatively just because it might be needed.
 
 ---
 
