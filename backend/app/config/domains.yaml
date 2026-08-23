@@ -1,0 +1,16 @@
+# Tier-1 domain registry. Adding a domain = an ingestion run + one entry
+# here, never new agent code. See .claude/rules/architecture.md.
+
+housing:
+  collection: housing
+  retrieval_mode: semantic
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer questions about University of Memphis on-campus housing:
+    residence hall rates, hall types, contract and cancellation policies,
+    and move-in/move-out dates.
+  sources:
+    - https://www.memphis.edu/reslife/housing101/housingrates.php
+    - https://www.memphis.edu/reslife/reshalls/
+    - https://www.memphis.edu/reslife/resources/housing.php
+    - https://www.memphis.edu/reslife/about/faqs.php
