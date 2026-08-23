@@ -60,7 +60,10 @@ def upsert_chunks(domain: str, chunks: list[dict]) -> None:
     )
 
 
-def query_domain(domain: str, question: str, k: int = 4) -> list[dict]:
+# 6, not 4: per-row table chunking put six sibling rate rows between a
+# question and the prose chunk answering it. Chosen empirically against
+# the housing eval, not calibrated -- see PLAN.md Section 17.9.
+def query_domain(domain: str, question: str, k: int = 6) -> list[dict]:
     collection = get_collection(domain)
     results = collection.query(query_texts=[question], n_results=k)
 

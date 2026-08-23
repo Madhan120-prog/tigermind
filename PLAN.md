@@ -453,3 +453,32 @@ combination. Section 9's CI gate cannot be built until this is settled.
 Both appear in the README and in Sections 9 and 11, but no phase in
 Section 13 builds either one. Assign them to a phase or drop them from the
 stated deliverables.
+
+### Found during Phase 1
+
+**17.9 — `k` was raised to 6 empirically, not calibrated.**
+Per-row table chunking made each row individually retrievable, but it also
+put six sibling rate rows between a question and the prose chunk that
+answered it, dropping a passing eval question to rank 8. Raising `k` from
+4 to 6 restored it. Both numbers are guesses; neither was derived from
+measured recall. Revisit alongside 17.1's hybrid retrieval, when a
+keyword pass can pull an exact-match chunk in without widening `k` for
+every query.
+
+**17.10 — the confidence gate cannot detect corrupt-but-relevant chunks.**
+The Phase 1 eval found a parser bug that mislabeled every housing rate by
+a year. Every affected answer still scored `confidence_ok = True`, and the
+worst one had the run's *best* similarity score (distance 0.349). Distance
+measures whether a chunk is about the question, not whether it is true, so
+the gate in `graph/guardrails.py` is structurally unable to catch bad
+ingestion. Guarding ingestion correctness needs a different mechanism —
+parser tests against known table shapes, or an ingestion-time assertion
+that every extracted row kept its full column count.
+
+**17.11 — eval verdicts are not deterministic.**
+The same question against unchanged retrieval produced a hedged "I can't
+find this" on one run and a confident inference on the next. A CI gate
+(Section 9) that fails on sampling variance will be ignored within a week.
+Whatever pass criterion 17.7 settles on has to tolerate this — pinning
+`temperature=0`, scoring on retrieved `source_url` rather than answer
+prose, or requiring N consecutive failures before a red build.
