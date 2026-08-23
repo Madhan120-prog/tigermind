@@ -19,6 +19,24 @@
   repo and performs every merge themselves — Claude Code opens the PR and
   stops there, never runs `gh pr merge` or merges via the GitHub UI.
 - Self-review the diff before merging.
+- **The PR body carries the phase's eval results.** Paste the eval subset
+  outcome into the PR description as a table — one row per eval question,
+  with pass/fail and a one-line note on any failure. This is the *only*
+  place eval results persist: `/clear` at the phase boundary wipes the
+  session, and git records what code landed but not how it scored. It
+  doubles as portfolio evidence — a reader scrolling the PR history sees a
+  scored eval on every phase. Use this shape:
+
+  ```markdown
+  ## Eval — <domain(s)>, N/M passing
+
+  | # | Question | Result | Note |
+  |---|---|---|---|
+  | 1 | How much is South Hall for 2026-27? | pass | |
+  | 2 | Can freshmen live in Victory Park? | fail | retrieved the traditional-hall table, not the apartment one |
+
+  **Fixed as a result:** <what changed, or "nothing — logged as PLAN.md 17.x">
+  ```
 - A phase's eval subset (`eval/eval_set.csv`) must pass before merge — once
   Phase 5 CI is wired up (`PLAN.md` Section 9), this is enforced by GitHub
   Actions rather than manual discipline.

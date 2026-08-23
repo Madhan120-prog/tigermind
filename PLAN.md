@@ -377,3 +377,79 @@ vector DB" projects:
 Don't add this to the resume until Phase 5 (portfolio-ready checkpoint) is
 done. The differentiated story is an eval finding and a fix, plus the
 `interrupt()`-gated action flow — not "built a chatbot with LangGraph."
+
+---
+
+## 17. Open Questions
+
+Tracked here rather than only in conversation, per the working agreement in
+`CLAUDE.md` ("flag vagueness instead of coding around it"). Each item names
+the phase that must resolve it. Delete an item when it's decided — and
+update the section it contradicts in the same commit.
+
+### Blocking Phase 2
+
+**17.1 — Structured and hybrid retrieval don't exist yet.**
+Section 13 describes Phase 2 as "ingestion + one config entry — no new
+agent code." But `domains.yaml` declares a `retrieval_mode` that
+`retrieval/chroma_client.py` currently ignores: every query runs semantic
+search. Faculty and Exams/Deadlines are classified `structured` (Section
+6), Course Catalog `hybrid`. That code is unwritten, so Phase 2 contains
+real retrieval work its estimate doesn't account for.
+*Decide:* build structured retrieval in Phase 1 while the slice is small,
+or re-scope Phase 2's estimate honestly. Either way Section 13's "no new
+agent code" line needs correcting.
+
+**17.2 — `freshness_tier` is per-domain, but the data isn't.**
+`domains.yaml` carries one freshness tier per domain. Housing is `slow`,
+yet `docs/domain-research/housing.md` found that move-out dates and
+semester cancellation ladders go stale in a single term and "should be
+tagged accordingly rather than assuming Housing's whole freshness tier
+applies uniformly." The config shape can't currently express that.
+*Decide:* per-chunk freshness override at ingestion time, or accept
+per-domain granularity and document the limitation.
+
+**17.3 — Does `programs` own its own collection?**
+Section 3 implies a distinct `programs` collection for static "what majors
+exist" lookups; Section 4 folds Programs into the Course Catalog row.
+One of the two is wrong, and `domains.yaml` needs a single answer.
+
+**17.4 — Who owns payment deadlines, Fees or Exams/Deadlines?**
+`docs/domain-research/exams-deadlines.md` flags the `usbs/calendars/`
+overlap and recommends Fees own payment deadlines while Exams/Deadlines
+owns academic ones — recorded as a recommendation, never ratified.
+Unresolved, the same dates get ingested into two collections.
+
+**17.5 — Events may not be one Tier-1 domain at all.**
+`docs/domain-research/events.md` found two separate platforms (the campus
+calendar and TigerZone), neither confirmed scrapable by plain HTTP, plus
+department-level calendars on top. It's budgeted as one ordinary config
+entry. Needs the ingestion spike Section 11 describes *before* Phase 2
+planning, preferring iCal → JSON API → Playwright in that order.
+
+### Blocking Phase 3
+
+**17.6 — Majors has no Phase 0 research and no eval rows.**
+`docs/domain-research/majors.md` is still an unfilled template, and
+`eval/eval_set.csv` has 40 rows across the eight Tier-1 domains and zero
+for Majors. Majors is the Tier-2 flagship and the stated justification for
+LangGraph's state primitives (Section 3), so Phase 3 currently has no
+foundation under it. Phase 0 was closed without this deliverable.
+
+### Blocking Phase 5
+
+**17.7 — "The eval passes" is undefined.**
+`CLAUDE.md` requires running the eval subset before advancing a phase, and
+Section 9 requires CI to block merges on eval failure — but
+`eval/run_eval.py` only prints question/expected/actual for manual review.
+There is no pass criterion.
+*Decide:* exact/substring match on the expected answer, correct
+`source_url` present in the cited sources, an LLM-as-judge call, or a
+combination. Section 9's CI gate cannot be built until this is settled.
+
+### Unscheduled deliverables
+
+**17.8 — The frontend and `docker-compose.yml` are promised but unphased.**
+Both appear in the README and in Sections 9 and 11, but no phase in
+Section 13 builds either one. Assign them to a phase or drop them from the
+stated deliverables.
