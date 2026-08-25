@@ -524,17 +524,34 @@ to avoid, for the domain that adds the least capability. Course Catalog
 stays deferred unless a sanctioned bulk source appears (an official data
 feed, or a PDF catalog export that is not challenged).
 
-**17.13 — Deferral triggers match the question, not the answer.**
-`graph/guardrails.py` checks a domain's configured triggers against the
-student's question, so "can international students work more during
-breaks" defers correctly. But "how many hours can I work" does not
-trigger, and the agent volunteered a fabricated F-1 break limit in its
-answer anyway on the run that exposed this — inventing "25 hours" by
-pattern from the domestic 25-to-35 progression, with a citation attached.
-Matching the answer as well would close that, at the cost of suppressing
-sound domestic answers that merely mention visa holders in passing.
-*Decide:* answer-side matching, a narrower "does the answer assert a
-figure on a deferred topic" check, or accept the gap and rely on the
-prompt snippet for the volunteered case. Related to 17.11: the prompt-only
-version of this rule complied on one run and not the next, which is why it
-moved into code.
+**17.13 — A deferral can cost a sound answer, because the check fires
+after generation.** *(Partly addressed in Phase 2; the remaining half is
+Phase 4 work.)*
+
+Deferral triggers match the student's question, so "can international
+students work more during breaks" defers correctly. But "how many hours can
+I work" does not trigger, and the agent volunteered a fabricated F-1 break
+limit anyway -- inventing "25 hours" by pattern from the domestic 25-to-35
+progression, reproducibly, with a citation attached.
+
+Shipped in Phase 2: the domain's configured deferrals are rendered into the
+agent's system prompt as an explicit constraint, and guardrails then refuse
+any answer asserting a figure on a deferred topic. Instruct first, verify
+second. Three false positives had to be fixed along the way, all of them
+the check tripping over itself: a source URL containing "international",
+the referred office's own room and phone number, and the trigger `f-1`
+containing a digit that satisfied its own proximity test.
+
+**The remaining cost:** when the model volunteers a figure anyway, the
+whole answer is replaced by a deferral, so "how many hours a week can I
+work on campus" loses its correct 25-hour domestic answer. That question is
+a standing eval failure, deliberately left failing rather than having its
+expectation rewritten to match the behaviour.
+
+*The fix is a constrained retry:* guardrails routes back to the agent once
+with the violated constraint restated, and only defers if the second
+attempt also violates it. That is a conditional edge that genuinely changes
+the graph's shape -- item 2 on `.claude/rules/langgraph-checklist.md` --
+arrived at from a real defect rather than invented to satisfy the checklist.
+Deliberately deferred to Phase 4 so the retry is designed alongside the
+router rather than built twice. Related to 17.11.
