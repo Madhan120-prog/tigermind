@@ -14,3 +14,37 @@ housing:
     - https://www.memphis.edu/reslife/reshalls/
     - https://www.memphis.edu/reslife/resources/housing.php
     - https://www.memphis.edu/reslife/about/faqs.php
+
+student-employment:
+  collection: student-employment
+  retrieval_mode: semantic
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer questions about University of Memphis student employment:
+    eligibility to work on campus, Federal Work-Study versus Regular
+    Student Employment, weekly hour limits, pay, and how to find and apply
+    for positions. Open positions are posted on TigerLink/Handshake, which
+    is outside your data -- explain the process, never imply you can see
+    live listings. International students have separate, stricter rules;
+    if a question involves visa or immigration eligibility, defer to
+    International Programs rather than answering.
+  sources:
+    - https://www.memphis.edu/studentemployment/
+    - https://www.memphis.edu/studentemployment/faq_students.php
+    - https://www.memphis.edu/scholarships/student_employment/sejobs.php
+    - https://www.memphis.edu/scholarships/student_employment/sepay.php
+    - https://www.memphis.edu/iss/current_international_students/employment_on_campus.php
+  deferrals:
+    - triggers: [international, f-1, f1, visa, immigration, opt, cpt, sevis]
+      refer_to: >
+        International Student Services, Brister Hall Room 120,
+        901.678.4271
+      because: >
+        On-campus work limits for students on a visa depend on
+        immigration status, and this domain's own sources disagree: the
+        student employment pay page states F-1 students may work up to 40
+        hours per week during school breaks, while the International
+        Student Services page gives a 20-hour in-session limit and says
+        nothing about breaks. Getting this wrong risks a status
+        violation, so it needs an authoritative answer rather than a
+        retrieved one.

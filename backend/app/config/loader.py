@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -14,6 +14,7 @@ class DomainConfig:
     freshness_tier: str
     prompt_snippet: str
     sources: list[str]
+    deferrals: list[dict] = field(default_factory=list)
 
 
 def load_domains() -> dict[str, DomainConfig]:

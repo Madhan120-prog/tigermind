@@ -523,3 +523,18 @@ access control, and it adds the `playwright` dependency Section 11 wanted
 to avoid, for the domain that adds the least capability. Course Catalog
 stays deferred unless a sanctioned bulk source appears (an official data
 feed, or a PDF catalog export that is not challenged).
+
+**17.13 — Deferral triggers match the question, not the answer.**
+`graph/guardrails.py` checks a domain's configured triggers against the
+student's question, so "can international students work more during
+breaks" defers correctly. But "how many hours can I work" does not
+trigger, and the agent volunteered a fabricated F-1 break limit in its
+answer anyway on the run that exposed this — inventing "25 hours" by
+pattern from the domestic 25-to-35 progression, with a citation attached.
+Matching the answer as well would close that, at the cost of suppressing
+sound domestic answers that merely mention visa holders in passing.
+*Decide:* answer-side matching, a narrower "does the answer assert a
+figure on a deferred topic" check, or accept the gap and rely on the
+prompt snippet for the volunteered case. Related to 17.11: the prompt-only
+version of this rule complied on one run and not the next, which is why it
+moved into code.
