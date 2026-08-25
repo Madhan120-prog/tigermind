@@ -27,15 +27,24 @@
 
 ## Data complications
 
-- The actual dollar amounts live in per-year/residency/level **PDF** schedules (e.g. `2526fees/ug_resident.pdf`), not the HTML pages — ingestion needs a PDF text extractor, confirming what `PLAN.md`'s earlier draft flagged.
+- The actual dollar amounts live in per-year/residency/level **PDF** schedules (e.g. `2526fees/ug_resident.pdf`), not the HTML pages — ingestion needs a PDF text extractor, confirming what `PLAN.md`'s earlier draft flagged. Verified reachable 2026-08-24: `ug_resident.pdf` returns 200, ~39 KB, `application/pdf`.
+- **`usbs/fees/` and `usbs/fees/otherfees.php` returned byte-identical responses on 2026-08-24** (134,824 bytes each). The itemized fee list may no longer exist as a separate page. Confirm which URLs are genuinely distinct before adding them to `domains.yaml` — listing both would ingest the same page twice under two source URLs.
 - Multiple parallel tuition tracks exist at the same course level — standard campus, "UofM Global" (Mxx sections), "TNeCampus" (Rxx sections) — each with a materially different per-credit-hour rate. A chunk stating a rate without naming its track is misleading.
 - Course-specific fees (music, engineering, nursing, business, fine arts) are a long tail of small add-ons layered on base tuition — worth its own structured chunk list rather than folding into general fee prose.
 - Institutional pages can go stale for years without anyone noticing (see Student Employment's 2022-dated wage figure) — cross-check any dollar figure against the current-year PDF, don't trust an older HTML page's inline number at face value.
 
 ## Proposed retrieval strategy
 
-- [x] Semantic RAG
+- [ ] Semantic RAG
 - [ ] Structured lookup
-- [ ] Hybrid
+- [x] Hybrid
 
-Justification: Matches `PLAN.md` §6. Fee *policy* content (what a fee covers, payment plan mechanics) is prose-appropriate for semantic search; the itemized dollar amounts are a bounded, low-cardinality list that can be embedded as short structured-text chunks without needing true regex/structured lookup.
+**Reclassified from Semantic to Hybrid on 2026-08-24.** Fee *policy* content
+(what a fee covers, payment plan mechanics) is prose and stays semantic. But
+a named fee resolving to an amount — "the late payment fee", "the University
+Service Fee", a per-credit-hour rate for a given residency/level/track — is
+an exact-match lookup with the same shape as a course code, and Housing's
+Phase 1 eval showed semantic search burying a specific dollar figure behind
+six topically-similar rate rows. Fees also inherits the hybrid slot that
+Course Catalog vacated (`PLAN.md` 17.12), so this domain is where the
+structured/semantic split gets built.

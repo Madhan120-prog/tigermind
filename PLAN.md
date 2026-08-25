@@ -82,13 +82,13 @@ Don't conflate them — most Majors questions are actually Tier 1.
 | Domain | Tier | Retrieval | Notes |
 |---|---|---|---|
 | Housing | 1 | Semantic | Rates, hall types, contract policies, move-in/out dates |
-| Fees / Financial | 1 | Semantic | Fee charts, payment guidelines, financial aid, and payment deadlines — Exams/Deadlines owns academic dates only |
+| Fees / Financial | 1 | **Hybrid** | Fee charts, payment guidelines, financial aid, and payment deadlines — Exams/Deadlines owns academic dates only. Reclassified from Semantic in Phase 2: a named fee is an exact-match lookup, fee policy is prose |
 | Faculty Directory | 1 | Structured | Per-department: who teaches what, office hours, contact |
 | Flyers / Announcements | 1 | Semantic | Short TTL — freshness-critical, see Section 7 |
 | Events | 1 | Semantic + dates | Freshness-critical |
 | Exams / Deadlines | 1 | Structured | Academic calendar; freshness-critical |
 | Student Employment | 1 | Semantic | On-campus jobs, work-study postings |
-| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic |
+| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
 | **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility, per-college process |
 | **My Classes / Drop-Add / Bursar** | **3** | Stateful + action | Phase 6 only. Mocked SSO + SIS — see Section 8 |
 
@@ -131,9 +131,11 @@ guardrails before returning.
 
 - **Structured lookup** (keyword/regex before falling back to embeddings):
   course codes, faculty names, exam dates.
-- **Semantic RAG**: Housing, Fees, Flyers, Events, Student Employment,
+- **Semantic RAG**: Housing, Flyers, Events, Student Employment,
   Majors process text.
-- **Hybrid**: Course Catalog (course-code queries → structured; "how do I
+- **Hybrid**: Fees (a named fee → its amount is exact-match; "how does the
+  payment plan work" is prose) and Course Catalog (course-code queries →
+  structured; "how do I
   withdraw" style → semantic).
 
 ---
@@ -297,13 +299,22 @@ section's checkpoint rule deliberately rather than after slipping:
 
 | Domain | Mode | Adds |
 |---|---|---|
-| Fees | semantic | PDF extraction (`pdfplumber`) — rate schedules are PDF-only |
+| Fees | hybrid | PDF extraction (`pdfplumber`) *and* the structured/semantic split |
 | Faculty | structured | keyword/exact-match retrieval, which does not exist yet |
-| Course Catalog | hybrid | the structured/semantic split, plus an Acalog ingestion spike |
+| Student Employment | semantic | nothing but a config entry — which is the point |
 
 With Housing that is four domains covering all three retrieval modes and
 both HTML and PDF sources — the full retrieval story of Section 16's first
-differentiator, with nothing repeated for its own sake.
+differentiator, with nothing repeated for its own sake. Student Employment
+is deliberately the cheapest possible domain: if it takes more than an
+ingestion run and one `domains.yaml` entry, the config-driven claim in
+Section 16 is false and that is worth finding out.
+
+**Course Catalog was cut from this phase on 2026-08-24** after a spike
+found it unreachable (17.12), and Fees took over the hybrid slot. A named
+fee resolving to an amount is the same exact-match shape as a course code;
+fee policy is prose. It is a slightly weaker illustration than `COMP 1000`
+and it is the one actually available.
 
 **Flyers, Events, Exams/Deadlines and Student Employment are deferred, not
 cancelled.** Each would add a domain but no new capability: their retrieval
@@ -424,10 +435,12 @@ applies uniformly." The config shape can't currently express that.
 *Decide:* per-chunk freshness override at ingestion time, or accept
 per-domain granularity and document the limitation.
 
-**17.3 — Does `programs` own its own collection?**
+**17.3 — Does `programs` own its own collection?** *(deferred with Course
+Catalog — no longer blocks Phase 2.)*
 Section 3 implies a distinct `programs` collection for static "what majors
 exist" lookups; Section 4 folds Programs into the Course Catalog row.
-One of the two is wrong, and `domains.yaml` needs a single answer.
+One of the two is wrong, and `domains.yaml` needs a single answer whenever
+a programs corpus actually exists. Blocked behind 17.12 either way.
 
 **17.5 — Events may not be one Tier-1 domain at all.** *(deferred with
 the domain — no longer blocks Phase 2.)*
@@ -493,3 +506,20 @@ find this" on one run and a confident inference on the next. A CI gate
 Whatever pass criterion 17.7 settles on has to tolerate this — pinning
 `temperature=0`, scoring on retrieved `source_url` rather than answer
 prose, or requiring N consecutive failures before a red build.
+
+**17.12 — Course Catalog has no reachable public source.**
+Phase 0 recorded that `catalog.memphis.edu` returned empty content and
+guessed JS rendering. A Phase 2 spike found the actual cause: the site
+returns HTTP 202 with an AWS WAF JavaScript challenge
+(`awswaf.com/.../challenge.js`) to every non-browser client, browser
+User-Agent included, and its `robots.txt` sets `crawl-delay: 120` — two
+minutes per request, against a catalog needing hundreds of pages. The
+`ssb.bannerprod.memphis.edu` alternative resolves in DNS but refuses
+connections on 80, 443 and 8443, so it is campus-network-only or retired.
+
+Defeating the WAF would mean driving a headless browser specifically to
+pass a bot challenge. That is declined here: it circumvents a deliberate
+access control, and it adds the `playwright` dependency Section 11 wanted
+to avoid, for the domain that adds the least capability. Course Catalog
+stays deferred unless a sanctioned bulk source appears (an official data
+feed, or a PDF catalog export that is not challenged).
