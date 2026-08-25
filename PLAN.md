@@ -82,7 +82,7 @@ Don't conflate them — most Majors questions are actually Tier 1.
 | Domain | Tier | Retrieval | Notes |
 |---|---|---|---|
 | Housing | 1 | Semantic | Rates, hall types, contract policies, move-in/out dates |
-| Fees / Financial | 1 | Semantic | Fee charts, payment guidelines, financial aid |
+| Fees / Financial | 1 | Semantic | Fee charts, payment guidelines, financial aid, and payment deadlines — Exams/Deadlines owns academic dates only |
 | Faculty Directory | 1 | Structured | Per-department: who teaches what, office hours, contact |
 | Flyers / Announcements | 1 | Semantic | Short TTL — freshness-critical, see Section 7 |
 | Events | 1 | Semantic + dates | Freshness-critical |
@@ -291,11 +291,34 @@ Build the config-driven generic domain agent once, prove it end-to-end on
 Housing: scrape → chunk → embed → retrieve → guardrail → answer. Go/no-go
 checkpoint — if this doesn't work cleanly, debug here before scaling out.
 
-### Phase 2 — Remaining Tier-1 Domains (3-5 days total)
-Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course
-Catalog. Each is ingestion + one config entry against the proven Phase 1
-agent — no new agent code. Course Catalog needs the hybrid structured/
-semantic split.
+### Phase 2 — One Domain Per Retrieval Mode (2-3 days)
+**Scoped down from seven domains to three on 2026-08-24**, invoking this
+section's checkpoint rule deliberately rather than after slipping:
+
+| Domain | Mode | Adds |
+|---|---|---|
+| Fees | semantic | PDF extraction (`pdfplumber`) — rate schedules are PDF-only |
+| Faculty | structured | keyword/exact-match retrieval, which does not exist yet |
+| Course Catalog | hybrid | the structured/semantic split, plus an Acalog ingestion spike |
+
+With Housing that is four domains covering all three retrieval modes and
+both HTML and PDF sources — the full retrieval story of Section 16's first
+differentiator, with nothing repeated for its own sake.
+
+**Flyers, Events, Exams/Deadlines and Student Employment are deferred, not
+cancelled.** Each would add a domain but no new capability: their retrieval
+modes are already proven by the three above. They remain onboardable by an
+ingestion run plus one `domains.yaml` entry, which is the config-driven
+claim in Section 16 working as designed rather than a gap. Events
+additionally carries unresolved scrapability risk (17.5) for zero new
+capability, which is the weakest possible reason to spend Phase 2 time.
+
+Correcting Section 13's earlier claim that Phase 2 needed "no new agent
+code": that held for the three semantic domains only. Faculty's structured
+retrieval and Course Catalog's hybrid split are unwritten code, and this
+phase builds them. `domains.yaml` has declared a `retrieval_mode` since
+Phase 1 that `retrieval/chroma_client.py` ignores — every query runs
+semantic search today.
 
 ### Phase 3 — Majors State Machine (3-4 days)
 `StateGraph` with `{interests, gpa, completed_courses}` state, intake
@@ -384,21 +407,13 @@ done. The differentiated story is an eval finding and a fix, plus the
 
 Tracked here rather than only in conversation, per the working agreement in
 `CLAUDE.md` ("flag vagueness instead of coding around it"). Each item names
-the phase that must resolve it. Delete an item when it's decided — and
-update the section it contradicts in the same commit.
+the phase that must resolve it. Delete an item when it's decided — and update
+the section it contradicts in the same commit.
+
+Numbers are never reused or renumbered: a gap means an item was resolved,
+and code comments cite these numbers (see `retrieval/chroma_client.py`).
 
 ### Blocking Phase 2
-
-**17.1 — Structured and hybrid retrieval don't exist yet.**
-Section 13 describes Phase 2 as "ingestion + one config entry — no new
-agent code." But `domains.yaml` declares a `retrieval_mode` that
-`retrieval/chroma_client.py` currently ignores: every query runs semantic
-search. Faculty and Exams/Deadlines are classified `structured` (Section
-6), Course Catalog `hybrid`. That code is unwritten, so Phase 2 contains
-real retrieval work its estimate doesn't account for.
-*Decide:* build structured retrieval in Phase 1 while the slice is small,
-or re-scope Phase 2's estimate honestly. Either way Section 13's "no new
-agent code" line needs correcting.
 
 **17.2 — `freshness_tier` is per-domain, but the data isn't.**
 `domains.yaml` carries one freshness tier per domain. Housing is `slow`,
@@ -414,18 +429,14 @@ Section 3 implies a distinct `programs` collection for static "what majors
 exist" lookups; Section 4 folds Programs into the Course Catalog row.
 One of the two is wrong, and `domains.yaml` needs a single answer.
 
-**17.4 — Who owns payment deadlines, Fees or Exams/Deadlines?**
-`docs/domain-research/exams-deadlines.md` flags the `usbs/calendars/`
-overlap and recommends Fees own payment deadlines while Exams/Deadlines
-owns academic ones — recorded as a recommendation, never ratified.
-Unresolved, the same dates get ingested into two collections.
-
-**17.5 — Events may not be one Tier-1 domain at all.**
+**17.5 — Events may not be one Tier-1 domain at all.** *(deferred with
+the domain — no longer blocks Phase 2.)*
 `docs/domain-research/events.md` found two separate platforms (the campus
 calendar and TigerZone), neither confirmed scrapable by plain HTTP, plus
-department-level calendars on top. It's budgeted as one ordinary config
-entry. Needs the ingestion spike Section 11 describes *before* Phase 2
-planning, preferring iCal → JSON API → Playwright in that order.
+department-level calendars on top. Whenever Events is picked up, it needs
+the ingestion spike Section 11 describes first, preferring iCal → JSON API
+→ Playwright in that order. This risk, against zero new capability, is why
+Events was deferred out of Phase 2.
 
 ### Blocking Phase 3
 
