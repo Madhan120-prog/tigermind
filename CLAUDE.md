@@ -41,6 +41,15 @@ read the relevant phase section there before starting work.
   user is learning this stack as the project goes and is not yet
   proficient in it — skip jargon-dense summaries, explain what the change
   does and why in terms a newer engineer can follow.
+- **Flag vagueness instead of coding around it.** If a spec, a domain
+  research doc, or a `PLAN.md` section is ambiguous or contradicts the
+  code, say so and get a decision — don't pick an interpretation silently
+  and build on it. Unresolved items go in `PLAN.md` Section 17.
+- **When reality diverges from the plan, update the plan in the same
+  commit.** New rules, changed scope, or a decision that supersedes what
+  `PLAN.md` / `.claude/rules/` say get written into those files as part of
+  the work, not deferred. Docs that drift from the code are worse than no
+  docs.
 
 ## Stack
 - **Backend: FastAPI** — async-native (matters for concurrent LLM/retrieval

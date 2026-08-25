@@ -1,11 +1,12 @@
 fastapi
 uvicorn[standard]
 langgraph
-langchain-core
+anthropic
 chromadb
 sentence-transformers
 python-dotenv
+pyyaml
 beautifulsoup4
-requests
-pypdf
+httpx
+pdfplumber
 pytest

@@ -19,6 +19,24 @@
   repo and performs every merge themselves — Claude Code opens the PR and
   stops there, never runs `gh pr merge` or merges via the GitHub UI.
 - Self-review the diff before merging.
+- **The PR body carries the phase's eval results.** Paste the eval subset
+  outcome into the PR description as a table — one row per eval question,
+  with pass/fail and a one-line note on any failure. This is the *only*
+  place eval results persist: `/clear` at the phase boundary wipes the
+  session, and git records what code landed but not how it scored. It
+  doubles as portfolio evidence — a reader scrolling the PR history sees a
+  scored eval on every phase. Use this shape:
+
+  ```markdown
+  ## Eval — <domain(s)>, N/M passing
+
+  | # | Question | Result | Note |
+  |---|---|---|---|
+  | 1 | How much is South Hall for 2026-27? | pass | |
+  | 2 | Can freshmen live in Victory Park? | fail | retrieved the traditional-hall table, not the apartment one |
+
+  **Fixed as a result:** <what changed, or "nothing — logged as PLAN.md 17.x">
+  ```
 - A phase's eval subset (`eval/eval_set.csv`) must pass before merge — once
   Phase 5 CI is wired up (`PLAN.md` Section 9), this is enforced by GitHub
   Actions rather than manual discipline.
@@ -28,6 +46,16 @@
   on GitHub rather than collapsed into `main`. Tag if the phase is a
   milestone (e.g. `v0.1` at the end of Phase 5's portfolio-ready
   checkpoint).
-- `/clear` the Claude Code session after merging, before starting the next
-  phase — each phase should start from a clean context, not one carrying
-  forward the previous phase's exploratory reasoning.
+- **Ask before clearing — never assume it.** `/clear` is a command the user
+  types; nothing invokes it automatically on merge, and Claude Code cannot
+  run it. So at the start of every phase, Claude Code asks whether to start
+  fresh or carry the current session forward, and states what is actually
+  at stake in that choice: what is already written down (`PLAN.md`, the
+  phase PR body, commit messages, these rules) versus what only exists in
+  the conversation. The default answer is yes, clear — a phase should start
+  from a clean context rather than one carrying the previous phase's
+  superseded reasoning and wrong turns — but it is the user's call each
+  time, not a standing instruction to follow silently.
+- Clearing is only cheap because the phase's knowledge was written down
+  first. Before recommending it, confirm the phase's eval results are in
+  its PR body and any unresolved decisions are in `PLAN.md` Section 17.

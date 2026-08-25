@@ -377,3 +377,108 @@ vector DB" projects:
 Don't add this to the resume until Phase 5 (portfolio-ready checkpoint) is
 done. The differentiated story is an eval finding and a fix, plus the
 `interrupt()`-gated action flow — not "built a chatbot with LangGraph."
+
+---
+
+## 17. Open Questions
+
+Tracked here rather than only in conversation, per the working agreement in
+`CLAUDE.md` ("flag vagueness instead of coding around it"). Each item names
+the phase that must resolve it. Delete an item when it's decided — and
+update the section it contradicts in the same commit.
+
+### Blocking Phase 2
+
+**17.1 — Structured and hybrid retrieval don't exist yet.**
+Section 13 describes Phase 2 as "ingestion + one config entry — no new
+agent code." But `domains.yaml` declares a `retrieval_mode` that
+`retrieval/chroma_client.py` currently ignores: every query runs semantic
+search. Faculty and Exams/Deadlines are classified `structured` (Section
+6), Course Catalog `hybrid`. That code is unwritten, so Phase 2 contains
+real retrieval work its estimate doesn't account for.
+*Decide:* build structured retrieval in Phase 1 while the slice is small,
+or re-scope Phase 2's estimate honestly. Either way Section 13's "no new
+agent code" line needs correcting.
+
+**17.2 — `freshness_tier` is per-domain, but the data isn't.**
+`domains.yaml` carries one freshness tier per domain. Housing is `slow`,
+yet `docs/domain-research/housing.md` found that move-out dates and
+semester cancellation ladders go stale in a single term and "should be
+tagged accordingly rather than assuming Housing's whole freshness tier
+applies uniformly." The config shape can't currently express that.
+*Decide:* per-chunk freshness override at ingestion time, or accept
+per-domain granularity and document the limitation.
+
+**17.3 — Does `programs` own its own collection?**
+Section 3 implies a distinct `programs` collection for static "what majors
+exist" lookups; Section 4 folds Programs into the Course Catalog row.
+One of the two is wrong, and `domains.yaml` needs a single answer.
+
+**17.4 — Who owns payment deadlines, Fees or Exams/Deadlines?**
+`docs/domain-research/exams-deadlines.md` flags the `usbs/calendars/`
+overlap and recommends Fees own payment deadlines while Exams/Deadlines
+owns academic ones — recorded as a recommendation, never ratified.
+Unresolved, the same dates get ingested into two collections.
+
+**17.5 — Events may not be one Tier-1 domain at all.**
+`docs/domain-research/events.md` found two separate platforms (the campus
+calendar and TigerZone), neither confirmed scrapable by plain HTTP, plus
+department-level calendars on top. It's budgeted as one ordinary config
+entry. Needs the ingestion spike Section 11 describes *before* Phase 2
+planning, preferring iCal → JSON API → Playwright in that order.
+
+### Blocking Phase 3
+
+**17.6 — Majors has no Phase 0 research and no eval rows.**
+`docs/domain-research/majors.md` is still an unfilled template, and
+`eval/eval_set.csv` has 40 rows across the eight Tier-1 domains and zero
+for Majors. Majors is the Tier-2 flagship and the stated justification for
+LangGraph's state primitives (Section 3), so Phase 3 currently has no
+foundation under it. Phase 0 was closed without this deliverable.
+
+### Blocking Phase 5
+
+**17.7 — "The eval passes" is undefined.**
+`CLAUDE.md` requires running the eval subset before advancing a phase, and
+Section 9 requires CI to block merges on eval failure — but
+`eval/run_eval.py` only prints question/expected/actual for manual review.
+There is no pass criterion.
+*Decide:* exact/substring match on the expected answer, correct
+`source_url` present in the cited sources, an LLM-as-judge call, or a
+combination. Section 9's CI gate cannot be built until this is settled.
+
+### Unscheduled deliverables
+
+**17.8 — The frontend and `docker-compose.yml` are promised but unphased.**
+Both appear in the README and in Sections 9 and 11, but no phase in
+Section 13 builds either one. Assign them to a phase or drop them from the
+stated deliverables.
+
+### Found during Phase 1
+
+**17.9 — `k` was raised to 6 empirically, not calibrated.**
+Per-row table chunking made each row individually retrievable, but it also
+put six sibling rate rows between a question and the prose chunk that
+answered it, dropping a passing eval question to rank 8. Raising `k` from
+4 to 6 restored it. Both numbers are guesses; neither was derived from
+measured recall. Revisit alongside 17.1's hybrid retrieval, when a
+keyword pass can pull an exact-match chunk in without widening `k` for
+every query.
+
+**17.10 — the confidence gate cannot detect corrupt-but-relevant chunks.**
+The Phase 1 eval found a parser bug that mislabeled every housing rate by
+a year. Every affected answer still scored `confidence_ok = True`, and the
+worst one had the run's *best* similarity score (distance 0.349). Distance
+measures whether a chunk is about the question, not whether it is true, so
+the gate in `graph/guardrails.py` is structurally unable to catch bad
+ingestion. Guarding ingestion correctness needs a different mechanism —
+parser tests against known table shapes, or an ingestion-time assertion
+that every extracted row kept its full column count.
+
+**17.11 — eval verdicts are not deterministic.**
+The same question against unchanged retrieval produced a hedged "I can't
+find this" on one run and a confident inference on the next. A CI gate
+(Section 9) that fails on sampling variance will be ignored within a week.
+Whatever pass criterion 17.7 settles on has to tolerate this — pinning
+`temperature=0`, scoring on retrieved `source_url` rather than answer
+prose, or requiring N consecutive failures before a red build.
