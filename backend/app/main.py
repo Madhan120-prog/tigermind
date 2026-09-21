@@ -57,14 +57,25 @@ class MajorsResponse(BaseModel):
     thread_id: str
     answer: str
     awaiting_confirmation: bool
+    confirmation_prompt: str | None = None
+    draft_recommendation: dict | None = None
     state_snapshot: dict
 
 
 def _majors_response(thread_id: str, result: dict) -> MajorsResponse:
+    # When paused, "answer" is empty and the only place the actual
+    # confirmation question lives is the interrupt payload -- a client
+    # that only sees awaiting_confirmation=True has nothing to show the
+    # student before calling /majors/resume.
+    interrupts = result.get("__interrupt__")
+    payload = interrupts[0].value if interrupts else None
+
     return MajorsResponse(
         thread_id=thread_id,
         answer=result.get("answer") or "",
-        awaiting_confirmation="__interrupt__" in result,
+        awaiting_confirmation=interrupts is not None,
+        confirmation_prompt=payload.get("prompt") if payload else None,
+        draft_recommendation=payload.get("draft") if payload else None,
         state_snapshot={
             "target_major": result.get("target_major"),
             "interests": result.get("interests", []),
