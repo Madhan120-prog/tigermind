@@ -265,8 +265,9 @@ guardrails design depends on.
 |---|---|
 | Housing | `memphis.edu/reslife` |
 | Fees / Financial | `memphis.edu/usbs`, `memphis.edu/financialaid/consumer_info.php` |
-| Course Catalog / Programs | `catalog.memphis.edu` |
-| Majors advising | Per-college advising pages + `umdegree.memphis.edu` |
+| Course Catalog | `catalog.memphis.edu` — still blocked, see 17.12 |
+| Programs (Majors Tier 1) | `memphis.edu/academics/ugmajors.php`, `memphis.edu/fcbeundergrad/programs/`, Loewenberg Nursing's general program page, `memphis.edu/advising/students/changingmajor.php` |
+| Majors advising (Tier 2) | `memphis.edu/nursing/program-admit/bsn/updatedbsn.php` for the one verified competitive-major ruleset (Nursing), plus `changingmajor.php` for the declare path. `umdegree.memphis.edu` removed from this row — confirmed SSO-gated, not fetchable at all |
 | Faculty | Each department's public directory page |
 | Flyers / Announcements | Campus news / department announcement pages |
 | Events | `memphis.edu/events` (or campus calendar equivalent) |
