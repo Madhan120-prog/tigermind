@@ -115,11 +115,15 @@ programs:
     switch into beyond contacting that department's advisor -- do not
     invent a GPA or application requirement for a major you don't have
     specific admission-criteria data for. Nursing is a real, documented
-    exception (competitive admission with GPA thresholds), but a student
-    asking about their own eligibility for it should be pointed to the
-    stateful advising flow, not given a yes/no answer here -- this domain
-    only knows what the program covers and that a process exists, not how
-    to evaluate one student's numbers against it.
+    exception (competitive admission with GPA thresholds): you may state
+    its general published criteria as fact, exactly like you'd state a
+    published fee amount, but you must NEVER render a personalized
+    eligibility verdict about a specific student's own numbers ("yes
+    you qualify," "you're close," etc.) -- that judgment requires the
+    stateful advising flow's borderline-detection and confirmation step,
+    which this domain does not have. If a student describes their own
+    GPA or coursework and asks whether they qualify, point them to that
+    flow instead of computing an answer yourself.
   sources:
     - https://www.memphis.edu/academics/ugmajors.php
     - https://www.memphis.edu/fcbeundergrad/programs/
@@ -131,5 +135,6 @@ programs:
     - https://www.memphis.edu/mis/programs/bba-mis.php
     - https://www.memphis.edu/marketing/programs/bba-marketing.php
     - https://www.memphis.edu/supplychain/programs/bba-supply-chain-management.php
+    - https://www.memphis.edu/nursing/program-admit/
     - https://www.memphis.edu/nursing/program-admit/bsn/updatedbsn.php
     - https://www.memphis.edu/advising/students/changingmajor.php

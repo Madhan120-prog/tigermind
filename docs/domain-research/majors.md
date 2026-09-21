@@ -30,20 +30,34 @@ Everything below is organized around that split.
     college Faculty already covers. 8 named majors, each with its own
     description page (Accounting, Business Economics, Finance, HR
     Management, Management, MIS, Marketing, Supply Chain Management).
-  - Loewenberg College of Nursing's general BSN program-description page —
-    Tier 1 depth for one non-FCBE example. **Not** the admission-criteria
-    page below — that's Tier 2 config data, not retrieval content.
+  - `memphis.edu/nursing/program-admit/` — Tier 1, ingested. Confirmed by
+    direct fetch to be purely descriptive, but genuinely thin (one short
+    chunk, a landing page linking out to the real program pages) — it
+    does not actually answer "what does the BSN cover."
+  - `memphis.edu/nursing/program-admit/bsn/updatedbsn.php` — **also
+    ingested into Tier 1**, superseding an earlier version of this doc
+    that called this "Tier 2 only." That claim was a clean-sounding rule
+    that didn't survive contact with the real page: this is where the
+    actual rich curriculum content lives (pathophysiology, clinical
+    rotations across the lifespan, professional content), and there is
+    no separate page with that content and no admission numbers. Excluding
+    it from Tier 1 to keep a tidy separation was tried and made two real
+    eval questions measurably worse (Q2, Q3 in `eval_set.csv`) without
+    removing the actual risk, which was never "the numbers exist in the
+    corpus" but "the agent renders a personalized verdict from them." That
+    risk is a prompt-level guardrail (`domains.yaml`'s `programs` entry
+    now says so explicitly: state the general criteria as fact, exactly
+    like a published fee amount, never compute a specific student's
+    eligibility), not a page-exclusion problem — the same pattern this
+    project already uses for deferrals. Confirmed current and
+    authoritative: a second page, `memphis.edu/nursing/program-admit/howtoapply.php`,
+    404s and no longer exists, and an earlier general web search had
+    surfaced different (stale/cached) numbers from it — this page was
+    fetched directly and is the one to trust.
   - `memphis.edu/advising/students/changingmajor.php` — the general
     declare-path process. Ingested once, reused by both tiers: Tier 1
     answers "how do I change my major" directly; Tier 2's `recommend` node
     cites this same chunk for the declare path.
-  - `memphis.edu/nursing/program-admit/bsn/updatedbsn.php` — Tier 2 only.
-    The real, current BSN admission-criteria numbers that drive the
-    `interrupt()` eligibility logic. Confirmed current and authoritative:
-    a second page, `memphis.edu/nursing/program-admit/howtoapply.php`,
-    404s and no longer exists, and an earlier general web search had
-    surfaced different (stale/cached) numbers from it — this page was
-    fetched directly just now and is the one to trust.
   - **Explicitly not usable, for either tier**: `umdegree.memphis.edu`,
     the degree-audit tool named in the project's original source-planning
     (`PLAN.md` Section 12). Fetching it 302-redirects straight to
