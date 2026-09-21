@@ -44,13 +44,22 @@ questions, find where it breaks, fix it, document the fix.
 These must be load-bearing, not decorative — see
 `.claude/rules/langgraph-checklist.md`:
 
-- [ ] A checkpointer persists the Majors agent's intake state across turns.
+- [x] A checkpointer persists the Majors agent's intake state across turns.
+      Verified in Phase 3: `MemorySaver`, proven with a real multi-call
+      test where turn 1's extracted interests survive into turn 2 without
+      being restated (`eval/majors_scenarios.py` Scenario A).
 - [ ] Conditional edges genuinely change the graph's shape based on router
-      output (single-domain vs. multi-domain vs. action-request).
-- [ ] `interrupt()` gates the Majors GPA/prereq recommendation **and** any
-      Phase 6 drop/add action — this is no longer a stretch goal. An agent
-      that can take real actions but pauses for human confirmation before
-      anything irreversible is the actual differentiator of this project.
+      output (single-domain vs. multi-domain vs. action-request). Still
+      Phase 4 work — but Majors' own intake→recommend edge is a working,
+      verified instance of the same underlying mechanism (Scenario B:
+      no GPA stays on intake, GPA supplied moves to recommend), a
+      smaller-scoped proof the router-level version can build on.
+- [x] `interrupt()` gates the Majors GPA/prereq recommendation. Verified
+      in Phase 3 against a real, borderline case (Scenarios C/C2): fires
+      only when eligibility is genuinely borderline, not for a clearly
+      eligible or clearly ineligible case (D/E), and both confirming and
+      declining the pause behave correctly. Phase 6's drop/add gate is
+      the same pattern, not yet built.
 
 ---
 
@@ -205,8 +214,11 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
 - One generic domain-agent function, not one function per domain — see
   Section 3. If a "specialist" starts accumulating domain-specific
   branches, that's a signal it belongs in Tier 2/3, not a config entry.
-- Small, single-responsibility node functions; typed Pydantic state
-  schemas for every graph's state.
+- Small, single-responsibility node functions; typed `TypedDict` state
+  schemas for every graph's state — corrected from "Pydantic" in an
+  earlier draft, which the shipped code (`GraphState`, `MajorsState`)
+  never actually followed; matching what exists rather than leaving the
+  doc/code mismatch for the next phase to inherit silently.
 - No dead code, no speculative abstractions for domains that don't exist
   yet — add the fourth generic domain by adding a config entry, not by
   refactoring in anticipation of it.
@@ -457,12 +469,29 @@ Events was deferred out of Phase 2.
 
 ### Blocking Phase 3
 
-**17.6 — Majors has no Phase 0 research and no eval rows.**
-`docs/domain-research/majors.md` is still an unfilled template, and
-`eval/eval_set.csv` has 40 rows across the eight Tier-1 domains and zero
-for Majors. Majors is the Tier-2 flagship and the stated justification for
-LangGraph's state primitives (Section 3), so Phase 3 currently has no
-foundation under it. Phase 0 was closed without this deliverable.
+**17.6 — RESOLVED in Phase 3.** `docs/domain-research/majors.md` is filled
+in with directly-verified research (real Nursing GPA/deadline numbers,
+`umdegree.memphis.edu` found unusable). Eval coverage now exists on both
+halves: 5 `eval_set.csv` rows for the Tier-1 `programs` domain, and 6
+scenarios in `eval/majors_scenarios.py` covering the stateful Tier-2 flow
+(checkpointer persistence, the conditional edge, and `interrupt()` firing
+correctly on a real borderline case and correctly not firing on clearly
+eligible/ineligible cases).
+
+**New, found during Phase 3 — other competitive majors are an explicit
+deferral, not a gap.** Only Nursing has a verified real eligibility
+ruleset (`backend/app/config/competitive_majors.yaml`); any other major
+gets the plain declare-path answer. Adding a second competitive major is
+a config entry plus its own verified research, not new code — same claim
+Tier-1 domains already make about `domains.yaml`.
+
+**New, found during Phase 3 — the durable checkpointer backend is an
+explicit deferral.** `MemorySaver` (already available, zero new
+dependencies) satisfies the checklist's actual bar ("survive between
+separate invocations") but is lost on process restart — verified
+directly by killing and restarting the server. A durable backend
+(`langgraph-checkpoint-sqlite`) is a documented upgrade path, not added
+speculatively, per the project's minimize-dependencies rule.
 
 ### Blocking Phase 5
 
