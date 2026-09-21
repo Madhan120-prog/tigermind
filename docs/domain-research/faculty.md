@@ -26,6 +26,7 @@
 ## Data complications
 
 - **No central directory** — the single biggest complication in this domain. Ingestion must enumerate departments individually and scrape each one's directory page separately; there's no one URL pattern covering all departments.
+- **The recorded URL patterns are already partly stale.** Checked 2026-08-24: `memphis.edu/me/faculty/` returns 200 (~44 KB), but `memphis.edu/economics/faculty_research/faculty-directory.php` — one of the two patterns recorded above — returns **404**. Every per-department URL is config *data* that has to be verified individually before it goes in `domains.yaml`; assuming a pattern generalises is how this domain silently ingests nothing for half its departments.
 - Emeritus/retired faculty and current faculty are sometimes listed on the same page (confirmed on Mechanical Engineering's page, which lists Faculty, Post Doctoral Fellow, Emeritus Faculty, and Staff together) — a chunk needs to carry that status so the agent doesn't present a retired professor as actively teaching.
 - **Office hours were not found on any directory page checked** — likely published per-syllabus, not centrally. "What are professor X's office hours" may not be answerable from this domain's source at all; this should be a confidence-gate case, not a guess.
 - Contact info (email/phone/office) is exactly the kind of fact where an error is worse than a vague answer — reinforces the guardrails citation requirement for this domain specifically.

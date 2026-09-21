@@ -33,7 +33,7 @@ def run_eval(domain: str) -> None:
         print(f"Expected: {row['expected_source_or_answer']}")
         print(f"Got:      {result['answer']}")
         print(f"Sources:  {result['sources']}")
-        print(f"Confidence OK: {result['confidence_ok']}")
+        print(f"Confidence OK: {result['confidence_ok']}  Deferred: {result['deferred']}")
 
 
 if __name__ == "__main__":

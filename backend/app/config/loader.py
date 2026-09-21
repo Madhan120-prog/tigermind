@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
@@ -13,7 +13,9 @@ class DomainConfig:
     retrieval_mode: str
     freshness_tier: str
     prompt_snippet: str
-    sources: list[str]
+    sources: list[str] = field(default_factory=list)
+    deferrals: list[dict] = field(default_factory=list)
+    source_discovery: dict = field(default_factory=dict)
 
 
 def load_domains() -> dict[str, DomainConfig]:

@@ -8,3 +8,4 @@ class GraphState(TypedDict):
     answer: str
     sources: list[str]
     confidence_ok: bool
+    deferred: bool

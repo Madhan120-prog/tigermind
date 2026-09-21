@@ -82,13 +82,13 @@ Don't conflate them — most Majors questions are actually Tier 1.
 | Domain | Tier | Retrieval | Notes |
 |---|---|---|---|
 | Housing | 1 | Semantic | Rates, hall types, contract policies, move-in/out dates |
-| Fees / Financial | 1 | Semantic | Fee charts, payment guidelines, financial aid |
+| Fees / Financial | 1 | **Hybrid** | Fee charts, payment guidelines, financial aid, and payment deadlines — Exams/Deadlines owns academic dates only. Reclassified from Semantic in Phase 2: a named fee is an exact-match lookup, fee policy is prose |
 | Faculty Directory | 1 | Structured | Per-department: who teaches what, office hours, contact |
 | Flyers / Announcements | 1 | Semantic | Short TTL — freshness-critical, see Section 7 |
 | Events | 1 | Semantic + dates | Freshness-critical |
 | Exams / Deadlines | 1 | Structured | Academic calendar; freshness-critical |
 | Student Employment | 1 | Semantic | On-campus jobs, work-study postings |
-| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic |
+| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
 | **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility, per-college process |
 | **My Classes / Drop-Add / Bursar** | **3** | Stateful + action | Phase 6 only. Mocked SSO + SIS — see Section 8 |
 
@@ -131,9 +131,11 @@ guardrails before returning.
 
 - **Structured lookup** (keyword/regex before falling back to embeddings):
   course codes, faculty names, exam dates.
-- **Semantic RAG**: Housing, Fees, Flyers, Events, Student Employment,
+- **Semantic RAG**: Housing, Flyers, Events, Student Employment,
   Majors process text.
-- **Hybrid**: Course Catalog (course-code queries → structured; "how do I
+- **Hybrid**: Fees (a named fee → its amount is exact-match; "how does the
+  payment plan work" is prose) and Course Catalog (course-code queries →
+  structured; "how do I
   withdraw" style → semantic).
 
 ---
@@ -291,11 +293,43 @@ Build the config-driven generic domain agent once, prove it end-to-end on
 Housing: scrape → chunk → embed → retrieve → guardrail → answer. Go/no-go
 checkpoint — if this doesn't work cleanly, debug here before scaling out.
 
-### Phase 2 — Remaining Tier-1 Domains (3-5 days total)
-Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course
-Catalog. Each is ingestion + one config entry against the proven Phase 1
-agent — no new agent code. Course Catalog needs the hybrid structured/
-semantic split.
+### Phase 2 — One Domain Per Retrieval Mode (2-3 days)
+**Scoped down from seven domains to three on 2026-08-24**, invoking this
+section's checkpoint rule deliberately rather than after slipping:
+
+| Domain | Mode | Adds |
+|---|---|---|
+| Fees | hybrid | PDF extraction (`pdfplumber`) *and* the structured/semantic split |
+| Faculty | structured | keyword/exact-match retrieval, which does not exist yet |
+| Student Employment | semantic | nothing but a config entry — which is the point |
+
+With Housing that is four domains covering all three retrieval modes and
+both HTML and PDF sources — the full retrieval story of Section 16's first
+differentiator, with nothing repeated for its own sake. Student Employment
+is deliberately the cheapest possible domain: if it takes more than an
+ingestion run and one `domains.yaml` entry, the config-driven claim in
+Section 16 is false and that is worth finding out.
+
+**Course Catalog was cut from this phase on 2026-08-24** after a spike
+found it unreachable (17.12), and Fees took over the hybrid slot. A named
+fee resolving to an amount is the same exact-match shape as a course code;
+fee policy is prose. It is a slightly weaker illustration than `COMP 1000`
+and it is the one actually available.
+
+**Flyers, Events, Exams/Deadlines and Student Employment are deferred, not
+cancelled.** Each would add a domain but no new capability: their retrieval
+modes are already proven by the three above. They remain onboardable by an
+ingestion run plus one `domains.yaml` entry, which is the config-driven
+claim in Section 16 working as designed rather than a gap. Events
+additionally carries unresolved scrapability risk (17.5) for zero new
+capability, which is the weakest possible reason to spend Phase 2 time.
+
+Correcting Section 13's earlier claim that Phase 2 needed "no new agent
+code": that held for the three semantic domains only. Faculty's structured
+retrieval and Course Catalog's hybrid split are unwritten code, and this
+phase builds them. `domains.yaml` has declared a `retrieval_mode` since
+Phase 1 that `retrieval/chroma_client.py` ignores — every query runs
+semantic search today.
 
 ### Phase 3 — Majors State Machine (3-4 days)
 `StateGraph` with `{interests, gpa, completed_courses}` state, intake
@@ -384,21 +418,13 @@ done. The differentiated story is an eval finding and a fix, plus the
 
 Tracked here rather than only in conversation, per the working agreement in
 `CLAUDE.md` ("flag vagueness instead of coding around it"). Each item names
-the phase that must resolve it. Delete an item when it's decided — and
-update the section it contradicts in the same commit.
+the phase that must resolve it. Delete an item when it's decided — and update
+the section it contradicts in the same commit.
+
+Numbers are never reused or renumbered: a gap means an item was resolved,
+and code comments cite these numbers (see `retrieval/chroma_client.py`).
 
 ### Blocking Phase 2
-
-**17.1 — Structured and hybrid retrieval don't exist yet.**
-Section 13 describes Phase 2 as "ingestion + one config entry — no new
-agent code." But `domains.yaml` declares a `retrieval_mode` that
-`retrieval/chroma_client.py` currently ignores: every query runs semantic
-search. Faculty and Exams/Deadlines are classified `structured` (Section
-6), Course Catalog `hybrid`. That code is unwritten, so Phase 2 contains
-real retrieval work its estimate doesn't account for.
-*Decide:* build structured retrieval in Phase 1 while the slice is small,
-or re-scope Phase 2's estimate honestly. Either way Section 13's "no new
-agent code" line needs correcting.
 
 **17.2 — `freshness_tier` is per-domain, but the data isn't.**
 `domains.yaml` carries one freshness tier per domain. Housing is `slow`,
@@ -409,23 +435,21 @@ applies uniformly." The config shape can't currently express that.
 *Decide:* per-chunk freshness override at ingestion time, or accept
 per-domain granularity and document the limitation.
 
-**17.3 — Does `programs` own its own collection?**
+**17.3 — Does `programs` own its own collection?** *(deferred with Course
+Catalog — no longer blocks Phase 2.)*
 Section 3 implies a distinct `programs` collection for static "what majors
 exist" lookups; Section 4 folds Programs into the Course Catalog row.
-One of the two is wrong, and `domains.yaml` needs a single answer.
+One of the two is wrong, and `domains.yaml` needs a single answer whenever
+a programs corpus actually exists. Blocked behind 17.12 either way.
 
-**17.4 — Who owns payment deadlines, Fees or Exams/Deadlines?**
-`docs/domain-research/exams-deadlines.md` flags the `usbs/calendars/`
-overlap and recommends Fees own payment deadlines while Exams/Deadlines
-owns academic ones — recorded as a recommendation, never ratified.
-Unresolved, the same dates get ingested into two collections.
-
-**17.5 — Events may not be one Tier-1 domain at all.**
+**17.5 — Events may not be one Tier-1 domain at all.** *(deferred with
+the domain — no longer blocks Phase 2.)*
 `docs/domain-research/events.md` found two separate platforms (the campus
 calendar and TigerZone), neither confirmed scrapable by plain HTTP, plus
-department-level calendars on top. It's budgeted as one ordinary config
-entry. Needs the ingestion spike Section 11 describes *before* Phase 2
-planning, preferring iCal → JSON API → Playwright in that order.
+department-level calendars on top. Whenever Events is picked up, it needs
+the ingestion spike Section 11 describes first, preferring iCal → JSON API
+→ Playwright in that order. This risk, against zero new capability, is why
+Events was deferred out of Phase 2.
 
 ### Blocking Phase 3
 
@@ -482,3 +506,93 @@ find this" on one run and a confident inference on the next. A CI gate
 Whatever pass criterion 17.7 settles on has to tolerate this — pinning
 `temperature=0`, scoring on retrieved `source_url` rather than answer
 prose, or requiring N consecutive failures before a red build.
+
+**17.12 — Course Catalog has no reachable public source.**
+Phase 0 recorded that `catalog.memphis.edu` returned empty content and
+guessed JS rendering. A Phase 2 spike found the actual cause: the site
+returns HTTP 202 with an AWS WAF JavaScript challenge
+(`awswaf.com/.../challenge.js`) to every non-browser client, browser
+User-Agent included, and its `robots.txt` sets `crawl-delay: 120` — two
+minutes per request, against a catalog needing hundreds of pages. The
+`ssb.bannerprod.memphis.edu` alternative resolves in DNS but refuses
+connections on 80, 443 and 8443, so it is campus-network-only or retired.
+
+Defeating the WAF would mean driving a headless browser specifically to
+pass a bot challenge. That is declined here: it circumvents a deliberate
+access control, and it adds the `playwright` dependency Section 11 wanted
+to avoid, for the domain that adds the least capability. Course Catalog
+stays deferred unless a sanctioned bulk source appears (an official data
+feed, or a PDF catalog export that is not challenged).
+
+**17.13 — A deferral can cost a sound answer, because the check fires
+after generation.** *(Partly addressed in Phase 2; the remaining half is
+Phase 4 work.)*
+
+Deferral triggers match the student's question, so "can international
+students work more during breaks" defers correctly. But "how many hours can
+I work" does not trigger, and the agent volunteered a fabricated F-1 break
+limit anyway -- inventing "25 hours" by pattern from the domestic 25-to-35
+progression, reproducibly, with a citation attached.
+
+Shipped in Phase 2: the domain's configured deferrals are rendered into the
+agent's system prompt as an explicit constraint, and guardrails then refuse
+any answer asserting a figure on a deferred topic. Instruct first, verify
+second. Three false positives had to be fixed along the way, all of them
+the check tripping over itself: a source URL containing "international",
+the referred office's own room and phone number, and the trigger `f-1`
+containing a digit that satisfied its own proximity test.
+
+**The remaining cost:** when the model volunteers a figure anyway, the
+whole answer is replaced by a deferral, so "how many hours a week can I
+work on campus" loses its correct 25-hour domestic answer. That question is
+a standing eval failure, deliberately left failing rather than having its
+expectation rewritten to match the behaviour.
+
+*The fix is a constrained retry:* guardrails routes back to the agent once
+with the violated constraint restated, and only defers if the second
+attempt also violates it. That is a conditional edge that genuinely changes
+the graph's shape -- item 2 on `.claude/rules/langgraph-checklist.md` --
+arrived at from a real defect rather than invented to satisfy the checklist.
+Deliberately deferred to Phase 4 so the retry is designed alongside the
+router rather than built twice. Related to 17.11.
+
+**17.14 -- Fees built out the hybrid slot; two shared bugs surfaced and
+were fixed for every domain, not just this one.**
+
+Ingested `usbs/fees/` (HTML) and `ug_resident.pdf` (PDF, via `pdfplumber`)
+against exactly one track -- standard campus, undergraduate, Tennessee
+resident, 2025-26 -- deliberately, per the checkpoint-rule pattern already
+used for Student Employment: proving the hybrid mechanism doesn't require
+ingesting every residency/level/track PDF. `domains.yaml`'s `fees` entry
+says so explicitly, so the agent declines other tracks rather than
+estimating from the one it has.
+
+Two bugs in `fetch.py`'s shared table logic, exercised by real data neither
+Housing nor Faculty happened to contain:
+
+- The PDF table carries a title row above its real header row; an HTML
+  `<table>` never does, since its title lives outside the tag. Treating
+  the title row as the header collapsed all 18 credit-hour rows into one
+  undifferentiated notes blob.
+- One HTML table on the Fees overview page has no header row at all --
+  every row, including the first, is `[category, description, amount]`.
+  The general logic silently ate that first row as a fake header and
+  mislabeled every subsequent row's dollar amount against the row above
+  it. Neither `<th>` vs `<td>` nor any other markup signal distinguishes
+  this from a real header row on this site (checked directly against
+  both), so the fix is content-based: a real header's last cell is a
+  label ("Total"), never a value ("$25", "Free"). Fixed in `rows_to_data`
+  for every domain, not with a Fees-specific branch.
+
+`_named_record` also needed its length-3 floor relaxed for digit-only key
+parts, or a credit-hour count like "9" -- the only thing distinguishing one
+PDF row from the next -- was filtered out before matching ever ran.
+
+**Also found, not fixed:** `management/faculty/faculty-directory/kirk-jessica.php`
+returns 200 with real content, but that page's bio text sits entirely
+outside `<main>`, unlike the other 99 ingested faculty pages -- `<main>`
+resolves to just breadcrumb text ("Home Department of Management
+Faculty"), so this one page silently yields zero chunks. Likely a one-off
+markup inconsistency on the source page rather than a pipeline defect,
+given 99 of 100 pages extract correctly with the same code. Left as a
+known gap rather than special-cased for one page.

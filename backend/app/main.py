@@ -19,6 +19,7 @@ class AskResponse(BaseModel):
     answer: str
     sources: list[str]
     confidence_ok: bool
+    deferred: bool
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -30,4 +31,5 @@ def ask(request: AskRequest) -> AskResponse:
         answer=result["answer"],
         sources=result["sources"],
         confidence_ok=result["confidence_ok"],
+        deferred=result["deferred"],
     )
