@@ -48,3 +48,31 @@ student-employment:
         nothing about breaks. Getting this wrong risks a status
         violation, so it needs an authoritative answer rather than a
         retrieved one.
+
+faculty:
+  collection: faculty
+  retrieval_mode: structured
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer questions about University of Memphis faculty: who is in a
+    department, their title, office location, phone and email, and their
+    research areas. Contact details are the kind of fact where a wrong
+    answer is worse than no answer, so quote them exactly from the context
+    or say you don't have them. Watch for a person's status: an emeritus,
+    retired or adjunct listing must never be presented as actively
+    teaching. Office hours are not published in this data at all -- they
+    appear on course syllabi, so say you don't have them rather than
+    guessing. Only the Fogelman College of Business and Economics
+    departments are ingested (Accountancy, Economics, Finance, Management,
+    Marketing, MIS, Supply Chain Management); for anyone outside those, say
+    the department isn't in your data rather than implying the person
+    doesn't exist.
+  source_discovery:
+    sitemap: https://www.memphis.edu/sitemap.xml
+    # Matches the URL shape rather than a list of departments, so a
+    # department adopting this convention is picked up with no config
+    # change. Other conventions need their own entry: Mechanical
+    # Engineering publishes at /me/faculty/{slug}.php with inconsistent
+    # slugs and non-person pages mixed in, so it is not covered here.
+    include: /[a-z0-9-]+/faculty/faculty-directory/[a-z0-9-]+\.php$
+    record_key_from: /faculty-directory/([a-z0-9-]+)\.php$

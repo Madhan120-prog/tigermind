@@ -57,7 +57,7 @@ def generic_domain_agent(state: GraphState) -> dict:
     """One function for every Tier-1 domain -- behavior comes entirely from
     the domain's config entry, never a per-domain code branch."""
     config = get_domain(state["domain"])
-    hits = query_domain(config.collection, state["question"])
+    hits = query_domain(config.collection, state["question"], mode=config.retrieval_mode)
 
     context = "\n\n".join(
         f"[Source: {h['metadata']['source_url']}]\n{h['text']}" for h in hits

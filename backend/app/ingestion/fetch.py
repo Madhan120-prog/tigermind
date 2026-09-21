@@ -74,8 +74,13 @@ def _table_to_rows(table) -> tuple[str, list[str], bool]:
     return "\n".join(notes), data_rows, bool(data_rows)
 
 
-def fetch_page_blocks(url: str, timeout: float = 15.0) -> list[tuple[str, bool]]:
-    """Fetch a page and return (text, is_atomic) blocks.
+def fetch_page(url: str, timeout: float = 15.0) -> tuple[str, list[tuple[str, bool]]]:
+    """Fetch a page and return (heading, [(text, is_atomic), ...]).
+
+    The heading travels with every chunk from the page, because a chunk
+    lifted out of the middle of a page loses what the page was about -- a
+    faculty member's biography paragraph does not repeat their name, so
+    "what is Dr. Amini's email" cannot reach it.
 
     A real data table becomes one atomic block per row, each carrying the
     table's notes. The row -- not the table -- is the unit that must stay
@@ -93,6 +98,8 @@ def fetch_page_blocks(url: str, timeout: float = 15.0) -> list[tuple[str, bool]]
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
+    # Captured before scoping to <main>, which drops <head>.
+    document_title = soup.title.get_text(strip=True) if soup.title else ""
     for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
         tag.decompose()
 
@@ -110,6 +117,9 @@ def fetch_page_blocks(url: str, timeout: float = 15.0) -> list[tuple[str, bool]]
     main = soup.find("main")
     if main is not None:
         soup = main
+
+    first_h1 = soup.find("h1")
+    heading = (first_h1.get_text(" ", strip=True) if first_h1 else "") or document_title
 
     blocks: list[tuple[str, bool]] = []
     # Innermost tables first: these pages nest a data table inside a layout
@@ -134,4 +144,4 @@ def fetch_page_blocks(url: str, timeout: float = 15.0) -> list[tuple[str, bool]]
     if prose:
         blocks.append((prose, False))
 
-    return blocks
+    return heading, blocks
