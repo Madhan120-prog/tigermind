@@ -65,16 +65,16 @@ These must be load-bearing, not decorative — see
 
 ## 3. System Overview — Three Tiers, Not One Agent Per Domain
 
-Eight of the ten domains are structurally identical: retrieve from a
-domain-scoped Chroma collection, cite sources, answer. Hand-writing eight
+Nine of the eleven domains are structurally identical: retrieve from a
+domain-scoped Chroma collection, cite sources, answer. Hand-writing nine
 near-duplicate LangGraph nodes for that is both bad engineering (violates
 DRY for no reason) and a worse portfolio story ("copy-pasted the same agent
-eight times" vs. "built one configurable agent and scaled it to eight
+nine times" vs. "built one configurable agent and scaled it to nine
 domains via config"). So:
 
 | Tier | Domains | Shape | Why bespoke code (or not) |
 |---|---|---|---|
-| **1 — Generic retrieval agent** | Housing, Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course Catalog | One function, parameterized by a domain config entry (collection name, retrieval mode, prompt snippet) | No new logic per domain — adding a domain means running ingestion + adding one config entry, not writing an agent |
+| **1 — Generic retrieval agent** | Housing, Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course Catalog, Programs | One function, parameterized by a domain config entry (collection name, retrieval mode, prompt snippet) | No new logic per domain — adding a domain means running ingestion + adding one config entry, not writing an agent |
 | **2 — Majors (flagship)** | Majors advising | Stateful multi-turn intake + recommendation | The only public-info domain where the *process* (declare vs. apply, GPA/prereq eligibility) requires state held across turns — this is what justifies LangGraph's state primitives in Tier 1's absence |
 | **3 — SIS actions (Phase 6, SSO-gated)** | My classes, drop/add, bursar balance | Stateful + agent takes real write actions | The only tier where the agent *does* something instead of *answering* something — requires auth, a confirm-before-execute HITL gate, and is explicitly the last phase built |
 
@@ -417,7 +417,7 @@ vector DB" projects:
    right now, and most portfolio projects never get past read-only Q&A.
 4. **An eval harness that gates merges in CI** — a Definition of Done
    enforced automatically, not "I tested it manually once."
-5. **A config-driven generic agent instead of eight copy-pasted
+5. **A config-driven generic agent instead of nine copy-pasted
    specialists** — reads as engineering judgment (recognizing and
    collapsing duplication) rather than "AI hobbyist wrote a chatbot per
    feature."
