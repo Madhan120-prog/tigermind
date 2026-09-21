@@ -88,8 +88,9 @@ Don't conflate them — most Majors questions are actually Tier 1.
 | Events | 1 | Semantic + dates | Freshness-critical |
 | Exams / Deadlines | 1 | Structured | Academic calendar; freshness-critical |
 | Student Employment | 1 | Semantic | On-campus jobs, work-study postings |
-| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
-| **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility, per-college process |
+| Course Catalog | 1 | Hybrid | Course codes = structured. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
+| Programs (Majors Tier 1) | 1 | Semantic | "What majors exist / what does X cover / how do I change my major" — built in Phase 3, resolves 17.3. Own collection, unaffected by Course Catalog's block |
+| **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility. One verified competitive-major ruleset (Nursing) built in Phase 3 — see `docs/domain-research/majors.md` |
 | **My Classes / Drop-Add / Bursar** | **3** | Stateful + action | Phase 6 only. Mocked SSO + SIS — see Section 8 |
 
 ---
@@ -436,12 +437,14 @@ applies uniformly." The config shape can't currently express that.
 *Decide:* per-chunk freshness override at ingestion time, or accept
 per-domain granularity and document the limitation.
 
-**17.3 — Does `programs` own its own collection?** *(deferred with Course
-Catalog — no longer blocks Phase 2.)*
-Section 3 implies a distinct `programs` collection for static "what majors
-exist" lookups; Section 4 folds Programs into the Course Catalog row.
-One of the two is wrong, and `domains.yaml` needs a single answer whenever
-a programs corpus actually exists. Blocked behind 17.12 either way.
+**17.3 — RESOLVED in Phase 3.** `programs` is its own Tier-1 collection,
+decoupled from the still-blocked Course Catalog (17.12) — Section 3 was
+right, Section 4's folding of Programs into the Course Catalog row was
+the error. Sources have nothing to do with `catalog.memphis.edu`'s WAF
+block: `academics/ugmajors.php` (university-wide breadth), FCBE's 8
+majors (depth, same college Faculty covers), Nursing's general program
+page, and the general major-change process page. Built as a normal
+`domains.yaml` entry, zero new agent code, per Section 3's own claim.
 
 **17.5 — Events may not be one Tier-1 domain at all.** *(deferred with
 the domain — no longer blocks Phase 2.)*

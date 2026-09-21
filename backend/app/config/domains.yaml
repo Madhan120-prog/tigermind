@@ -95,3 +95,41 @@ fees:
   sources:
     - https://www.memphis.edu/usbs/fees/
     - https://www.memphis.edu/usbs/fees/2526fees/ug_resident.pdf
+
+# Tier 1 half of Majors (PLAN.md Section 3): static "what majors exist /
+# what does X cover / how do I change my major" questions. The stateful
+# "help me pick" / "can I get into a competitive major" flow is a separate
+# Tier 2 StateGraph, not this config -- see backend/app/graph/build_majors.py.
+programs:
+  collection: programs
+  retrieval_mode: semantic
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer factual questions about what majors and programs the
+    University of Memphis offers and what they cover. This covers
+    university-wide breadth (the full list of majors), the Fogelman
+    College of Business and Economics in depth, and Nursing (BSN) as one
+    example outside FCBE -- other colleges' individual program pages are
+    not in your data, so say a program isn't in your data rather than
+    implying it doesn't exist. Most majors have no special requirement to
+    switch into beyond contacting that department's advisor -- do not
+    invent a GPA or application requirement for a major you don't have
+    specific admission-criteria data for. Nursing is a real, documented
+    exception (competitive admission with GPA thresholds), but a student
+    asking about their own eligibility for it should be pointed to the
+    stateful advising flow, not given a yes/no answer here -- this domain
+    only knows what the program covers and that a process exists, not how
+    to evaluate one student's numbers against it.
+  sources:
+    - https://www.memphis.edu/academics/ugmajors.php
+    - https://www.memphis.edu/fcbeundergrad/programs/
+    - https://www.memphis.edu/accountancy/programs/bba-acct.php
+    - https://www.memphis.edu/economics/programs/bba-econ.php
+    - https://www.memphis.edu/finance/programs/bba-finance.php
+    - https://www.memphis.edu/management/programs/bba-hr.php
+    - https://www.memphis.edu/management/programs/bba-management.php
+    - https://www.memphis.edu/mis/programs/bba-mis.php
+    - https://www.memphis.edu/marketing/programs/bba-marketing.php
+    - https://www.memphis.edu/supplychain/programs/bba-supply-chain-management.php
+    - https://www.memphis.edu/nursing/program-admit/bsn/updatedbsn.php
+    - https://www.memphis.edu/advising/students/changingmajor.php
