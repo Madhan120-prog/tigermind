@@ -2,6 +2,7 @@ import os
 
 import anthropic
 
+from app.config.competitive_majors import match_competitive_major
 from app.graph.majors_state import MajorsState
 
 _client = None
@@ -60,10 +61,22 @@ this turn's message, since earlier turns may have named a major or GPA
 that this turn doesn't repeat. Do not guess at a value the student never
 stated; leave it null or empty instead."""
 
-CLARIFYING_QUESTION = (
+NO_MAJOR_QUESTION = (
     "Tell me a bit more -- what major are you considering, or if you're "
     "not sure yet, what subjects or interests are you drawn to?"
 )
+
+
+def _competitive_clarifying_question(major_name: str, gpa, completed_courses) -> str:
+    if gpa is None:
+        return (
+            f"{major_name} has GPA-based admission requirements. What's your "
+            "current cumulative GPA?"
+        )
+    return (
+        f"Thanks -- and have you completed (or are you working on) any of "
+        f"{major_name}'s prerequisite courses? Which ones, and what grades?"
+    )
 
 
 def majors_intake(state: MajorsState) -> dict:
@@ -84,13 +97,35 @@ def majors_intake(state: MajorsState) -> dict:
     )
 
     target_major = extracted["target_major"]
-    ready = target_major is not None
+    gpa = extracted["gpa"]
+    completed_courses = extracted["completed_courses"]
+
+    if target_major is None:
+        ready, answer = False, NO_MAJOR_QUESTION
+    else:
+        competitive = match_competitive_major(target_major)
+        if competitive is None:
+            # Declare path: no GPA/prereq gate exists, so nothing more is
+            # needed once the major itself is named.
+            ready, answer = True, ""
+        else:
+            # Competitive path: needs enough to make a real judgment --
+            # GPA plus at least one reported course, not necessarily every
+            # prerequisite (which may legitimately still be in progress).
+            ready = gpa is not None and len(completed_courses) > 0
+            answer = (
+                ""
+                if ready
+                else _competitive_clarifying_question(
+                    competitive.display_name, gpa, completed_courses
+                )
+            )
 
     return {
         "target_major": target_major,
         "interests": extracted["interests"],
-        "gpa": extracted["gpa"],
-        "completed_courses": extracted["completed_courses"],
+        "gpa": gpa,
+        "completed_courses": completed_courses,
         "ready_to_recommend": ready,
-        "answer": "" if ready else CLARIFYING_QUESTION,
+        "answer": answer,
     }
