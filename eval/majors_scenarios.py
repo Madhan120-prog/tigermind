@@ -114,4 +114,47 @@ SCENARIOS = [
             },
         ],
     },
+    {
+        "name": "F - high GPA but unrelated/failing courses (regression check)",
+        "checks": (
+            "GPA 3.5 (well above threshold+margin) but the reported courses "
+            "are none of Nursing's actual prerequisites, and one is a "
+            "failing grade. This must NOT score clearly_eligible on course "
+            "count alone -- real course-code and grade matching should "
+            "classify every required prerequisite as pending (not "
+            "reported), landing this in borderline, not a false positive."
+        ),
+        "turns": [
+            {
+                "kind": "message",
+                "content": (
+                    "I want to apply to Nursing. My GPA is 3.5. I've "
+                    "completed ENGL 1010 (A), HIST 2010 (F), ART 1030 (A), "
+                    "PHIL 1101 (A), DANC 1000 (A), MUS 1030 (A), "
+                    "THEA 1030 (A)"
+                ),
+            },
+        ],
+    },
+    {
+        "name": "G - in-progress prerequisite (schema fix check)",
+        "checks": (
+            "GPA 3.5, all prerequisites verified complete except one "
+            "explicitly in progress. Must be representable at all (the "
+            "old schema required a grade for every course) and should "
+            "land in borderline, not clearly_eligible, since one required "
+            "course isn't confirmed yet."
+        ),
+        "turns": [
+            {
+                "kind": "message",
+                "content": (
+                    "I want to apply to Nursing. My GPA is 3.5. I've "
+                    "completed CHEM 1010 (A), BIOL 2010 (A), BIOL 2020 (A), "
+                    "BIOL 1230 (A), MATH 1530 (A), NUTR 2202 (A), and I'm "
+                    "currently taking EDPR 2111 right now, not done yet"
+                ),
+            },
+        ],
+    },
 ]

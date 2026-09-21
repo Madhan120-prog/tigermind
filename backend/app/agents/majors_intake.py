@@ -42,12 +42,23 @@ EXTRACT_TOOL = {
                 "items": {
                     "type": "object",
                     "properties": {
-                        "code": {"type": "string"},
-                        "grade": {"type": "string"},
+                        "code": {
+                            "type": "string",
+                            "description": "Course code, normalized to SUBJECT #### form (e.g. 'CHEM 1010'), regardless of how the student wrote it.",
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["completed", "in_progress"],
+                            "description": "'completed' if the student has already taken and been graded, 'in_progress' if they're currently taking it or say it's not done yet.",
+                        },
+                        "grade": {
+                            "type": ["string", "null"],
+                            "description": "The grade received. Null when status is 'in_progress', since there's no grade yet.",
+                        },
                     },
-                    "required": ["code", "grade"],
+                    "required": ["code", "status", "grade"],
                 },
-                "description": "Specific courses and grades the student has mentioned completing.",
+                "description": "Specific courses the student has mentioned, completed or in progress, with grades where given.",
             },
         },
         "required": ["target_major", "interests", "gpa", "completed_courses"],
