@@ -555,3 +555,44 @@ the graph's shape -- item 2 on `.claude/rules/langgraph-checklist.md` --
 arrived at from a real defect rather than invented to satisfy the checklist.
 Deliberately deferred to Phase 4 so the retry is designed alongside the
 router rather than built twice. Related to 17.11.
+
+**17.14 -- Fees built out the hybrid slot; two shared bugs surfaced and
+were fixed for every domain, not just this one.**
+
+Ingested `usbs/fees/` (HTML) and `ug_resident.pdf` (PDF, via `pdfplumber`)
+against exactly one track -- standard campus, undergraduate, Tennessee
+resident, 2025-26 -- deliberately, per the checkpoint-rule pattern already
+used for Student Employment: proving the hybrid mechanism doesn't require
+ingesting every residency/level/track PDF. `domains.yaml`'s `fees` entry
+says so explicitly, so the agent declines other tracks rather than
+estimating from the one it has.
+
+Two bugs in `fetch.py`'s shared table logic, exercised by real data neither
+Housing nor Faculty happened to contain:
+
+- The PDF table carries a title row above its real header row; an HTML
+  `<table>` never does, since its title lives outside the tag. Treating
+  the title row as the header collapsed all 18 credit-hour rows into one
+  undifferentiated notes blob.
+- One HTML table on the Fees overview page has no header row at all --
+  every row, including the first, is `[category, description, amount]`.
+  The general logic silently ate that first row as a fake header and
+  mislabeled every subsequent row's dollar amount against the row above
+  it. Neither `<th>` vs `<td>` nor any other markup signal distinguishes
+  this from a real header row on this site (checked directly against
+  both), so the fix is content-based: a real header's last cell is a
+  label ("Total"), never a value ("$25", "Free"). Fixed in `rows_to_data`
+  for every domain, not with a Fees-specific branch.
+
+`_named_record` also needed its length-3 floor relaxed for digit-only key
+parts, or a credit-hour count like "9" -- the only thing distinguishing one
+PDF row from the next -- was filtered out before matching ever ran.
+
+**Also found, not fixed:** `management/faculty/faculty-directory/kirk-jessica.php`
+returns 200 with real content, but that page's bio text sits entirely
+outside `<main>`, unlike the other 99 ingested faculty pages -- `<main>`
+resolves to just breadcrumb text ("Home Department of Management
+Faculty"), so this one page silently yields zero chunks. Likely a one-off
+markup inconsistency on the source page rather than a pipeline defect,
+given 99 of 100 pages extract correctly with the same code. Left as a
+known gap rather than special-cased for one page.

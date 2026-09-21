@@ -78,6 +78,12 @@ def _named_record(domain: str, question: str) -> str | None:
 
     Returns None when several records match (a shared first name, say) --
     an ambiguous filter is worse than none, so it falls back to semantic.
+
+    The length-3 floor on a key part exists to drop short noise words from a
+    slug like "van-am" -- but it would also drop a credit-hour count like
+    "9", which is exactly the token a fee schedule's rows are keyed by and
+    the only thing distinguishing one row from the next. A digit is never
+    noise the way a short word can be, so it skips the floor.
     """
     lowered = question.lower()
     matches = [
@@ -86,7 +92,7 @@ def _named_record(domain: str, question: str) -> str | None:
         if any(
             re.search(rf"\b{re.escape(part)}\b", lowered)
             for part in key.split("-")
-            if len(part) > 2
+            if len(part) > 2 or part.isdigit()
         )
     ]
     return matches[0] if len(matches) == 1 else None
@@ -103,8 +109,15 @@ def query_domain(
     # Dispatch on the configured retrieval mode, never on the domain name --
     # see .claude/rules/architecture.md. A new structured domain is a config
     # entry; it does not touch this function.
+    #
+    # "hybrid" and "structured" share this path deliberately: PLAN.md
+    # Section 6 defines hybrid as "a named record resolves by exact match,
+    # everything else is prose" -- which is already exactly what the
+    # named-record-or-None fallback below does. A second branch that only
+    # ever did the same thing would be duplication with no behavior behind
+    # it, not a real distinction.
     where = None
-    if mode == "structured":
+    if mode in ("structured", "hybrid"):
         named = _named_record(domain, question)
         if named is not None:
             where = {"record_key": named}

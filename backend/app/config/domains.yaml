@@ -76,3 +76,22 @@ faculty:
     # slugs and non-person pages mixed in, so it is not covered here.
     include: /[a-z0-9-]+/faculty/faculty-directory/[a-z0-9-]+\.php$
     record_key_from: /faculty-directory/([a-z0-9-]+)\.php$
+
+fees:
+  collection: fees
+  retrieval_mode: hybrid
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer questions about University of Memphis tuition and fees:
+    flat fees (late payment, application, dining, mail services), payment
+    plan mechanics, and the undergraduate resident tuition-by-credit-hour
+    schedule for 2025-26. This data covers exactly one track: standard
+    campus, undergraduate, Tennessee resident. UofM Global, TNeCampus,
+    non-resident, international, graduate and law rates are all priced
+    differently and are not in your data -- say so rather than estimating
+    from the resident rate you do have. A dollar figure always needs its
+    academic year and track named alongside it, since the same credit-hour
+    count prices differently across tracks and years.
+  sources:
+    - https://www.memphis.edu/usbs/fees/
+    - https://www.memphis.edu/usbs/fees/2526fees/ug_resident.pdf
