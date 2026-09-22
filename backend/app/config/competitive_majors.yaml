@@ -23,17 +23,18 @@ nursing:
   # here (unlike, say, a competitive-ranking scenario where a margin
   # wouldn't mean the same thing).
   borderline_margin: 0.2
+  # Each requirement is a list of course codes that all satisfy it --
+  # most have exactly one, chemistry has two accepted alternatives per
+  # the source. A student reporting either one must count as meeting the
+  # requirement, not "pending" for having taken the "wrong" equivalent.
   required_prereqs:
-    - CHEM 1010
-    - BIOL 2010
-    - BIOL 2020
-    - BIOL 1230
-    - MATH 1530
-    - NUTR 2202
-    - EDPR 2111
-  # Simplified from the source: some prerequisites have lab components or
-  # alternate equivalent courses (e.g. CHEM 1010/1011 or CHEM 1110/1111)
-  # not distinguished here -- one representative code per requirement.
+    - [CHEM 1010, CHEM 1110]
+    - [BIOL 2010]
+    - [BIOL 2020]
+    - [BIOL 1230]
+    - [MATH 1530]
+    - [NUTR 2202]
+    - [EDPR 2111]
   application_deadlines:
     fall: February 15
     spring: September 1

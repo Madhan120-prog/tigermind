@@ -16,7 +16,11 @@ class CompetitiveMajor:
     prereq_gpa_min: float
     min_prereq_grade: str
     borderline_margin: float
-    required_prereqs: list[str]
+    # Each entry is a list of equivalent course codes that all satisfy that
+    # one requirement (e.g. ["CHEM 1010", "CHEM 1110"]) -- most lists have
+    # exactly one code, but treating every requirement as a group avoids a
+    # separate single-vs-equivalent code path in the matcher.
+    required_prereqs: list[list[str]]
     application_deadlines: dict = field(default_factory=dict)
     source_url: str = ""
     notes: str = ""

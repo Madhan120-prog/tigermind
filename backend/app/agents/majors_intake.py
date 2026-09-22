@@ -35,7 +35,11 @@ EXTRACT_TOOL = {
             },
             "gpa": {
                 "type": ["number", "null"],
-                "description": "The student's cumulative GPA, if mentioned. Null if not mentioned.",
+                "description": "The student's overall cumulative GPA, if mentioned. Null if not mentioned.",
+            },
+            "prereq_gpa": {
+                "type": ["number", "null"],
+                "description": "The student's GPA specifically in a major's required prerequisite courses, if mentioned separately from their overall cumulative GPA. Null if not mentioned or not distinguished from the cumulative figure.",
             },
             "completed_courses": {
                 "type": "array",
@@ -61,7 +65,7 @@ EXTRACT_TOOL = {
                 "description": "Specific courses the student has mentioned, completed or in progress, with grades where given.",
             },
         },
-        "required": ["target_major", "interests", "gpa", "completed_courses"],
+        "required": ["target_major", "interests", "gpa", "prereq_gpa", "completed_courses"],
     },
 }
 
@@ -70,7 +74,10 @@ student about choosing or changing their major. Read the ENTIRE
 conversation so far and extract everything currently known -- not just
 this turn's message, since earlier turns may have named a major or GPA
 that this turn doesn't repeat. Do not guess at a value the student never
-stated; leave it null or empty instead."""
+stated; leave it null or empty instead. Cumulative GPA and
+prerequisite-specific GPA are two different numbers for competitive
+majors -- only fill in prereq_gpa when the student actually distinguishes
+it from their overall GPA, never copy the cumulative figure into it."""
 
 NO_MAJOR_QUESTION = (
     "Tell me a bit more -- what major are you considering, or if you're "
@@ -78,16 +85,26 @@ NO_MAJOR_QUESTION = (
 )
 
 
-def _competitive_clarifying_question(major_name: str, gpa, completed_courses) -> str:
+def _competitive_clarifying_question(major_name: str, gpa, prereq_gpa, completed_courses) -> str:
     if gpa is None:
         return (
             f"{major_name} has GPA-based admission requirements. What's your "
             "current cumulative GPA?"
         )
-    return (
-        f"Thanks -- and have you completed (or are you working on) any of "
-        f"{major_name}'s prerequisite courses? Which ones, and what grades?"
-    )
+    if prereq_gpa is None:
+        return (
+            f"Thanks -- {major_name} also looks at your GPA specifically in "
+            "its required prerequisite courses, which is separate from your "
+            "overall GPA. Do you know that number? If not, just tell me "
+            "which prerequisite courses you've taken (or are taking) and "
+            "what grades you got."
+        )
+    if not completed_courses:
+        return (
+            f"And have you completed (or are you working on) any of "
+            f"{major_name}'s prerequisite courses? Which ones, and what grades?"
+        )
+    return ""
 
 
 def majors_intake(state: MajorsState) -> dict:
@@ -109,6 +126,7 @@ def majors_intake(state: MajorsState) -> dict:
 
     target_major = extracted["target_major"]
     gpa = extracted["gpa"]
+    prereq_gpa = extracted["prereq_gpa"]
     completed_courses = extracted["completed_courses"]
 
     if target_major is None:
@@ -121,14 +139,18 @@ def majors_intake(state: MajorsState) -> dict:
             ready, answer = True, ""
         else:
             # Competitive path: needs enough to make a real judgment --
-            # GPA plus at least one reported course, not necessarily every
-            # prerequisite (which may legitimately still be in progress).
+            # cumulative GPA plus at least one reported course. prereq_gpa
+            # is asked for but not required to proceed -- if still unknown
+            # once we reach recommend, the eligibility check treats that as
+            # unverified rather than assuming it matches the cumulative
+            # figure (that assumption is exactly what produced a false
+            # clearly_eligible before).
             ready = gpa is not None and len(completed_courses) > 0
             answer = (
                 ""
                 if ready
                 else _competitive_clarifying_question(
-                    competitive.display_name, gpa, completed_courses
+                    competitive.display_name, gpa, prereq_gpa, completed_courses
                 )
             )
 
@@ -136,6 +158,7 @@ def majors_intake(state: MajorsState) -> dict:
         "target_major": target_major,
         "interests": extracted["interests"],
         "gpa": gpa,
+        "prereq_gpa": prereq_gpa,
         "completed_courses": completed_courses,
         "ready_to_recommend": ready,
         "answer": answer,

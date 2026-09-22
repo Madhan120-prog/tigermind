@@ -472,11 +472,14 @@ Events was deferred out of Phase 2.
 **17.6 — RESOLVED in Phase 3.** `docs/domain-research/majors.md` is filled
 in with directly-verified research (real Nursing GPA/deadline numbers,
 `umdegree.memphis.edu` found unusable). Eval coverage now exists on both
-halves: 5 `eval_set.csv` rows for the Tier-1 `programs` domain, and 6
+halves: 5 `eval_set.csv` rows for the Tier-1 `programs` domain, and 9
 scenarios in `eval/majors_scenarios.py` covering the stateful Tier-2 flow
-(checkpointer persistence, the conditional edge, and `interrupt()` firing
+(checkpointer persistence, the conditional edge, `interrupt()` firing
 correctly on a real borderline case and correctly not firing on clearly
-eligible/ineligible cases).
+eligible/ineligible cases, real course-code/grade matching against
+false-positive course counting, in-progress prerequisites being
+representable and not auto-borderline, and cumulative vs.
+prerequisite-specific GPA being scored independently).
 
 **New, found during Phase 3 — other competitive majors are an explicit
 deferral, not a gap.** Only Nursing has a verified real eligibility

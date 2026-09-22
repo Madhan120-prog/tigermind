@@ -77,77 +77,120 @@ def _grade_meets_minimum(grade: str | None, minimum: str) -> bool:
 
 
 def _classify_prereqs(major: CompetitiveMajor, completed_courses: list[dict]) -> dict[str, list[str]]:
-    """Each required prerequisite lands in exactly one bucket -- verified
-    (completed at or above the minimum grade), failed (completed below
-    it), or pending (in progress, or never reported at all). Matching by
-    normalized course code, not by counting entries: a student who
-    reported enough unrelated or failing courses to hit the required
-    count previously scored clearly_eligible on volume alone, which is
-    the bug this replaces."""
+    """Each required prerequisite lands in exactly one bucket. A
+    requirement is a list of equivalent course codes (e.g. CHEM 1010 or
+    CHEM 1110) -- matching any one of them satisfies it, so a student
+    isn't penalized for taking the accepted alternative.
+
+    in_progress is intentionally not "failed" or "missing": the source
+    explicitly allows applying with a prerequisite still in progress, so
+    an otherwise-strong record with one in-progress course is not a
+    confirmed problem the way a below-minimum grade or an unreported
+    requirement is.
+    """
     reported = {_normalize_code(c["code"]): c for c in completed_courses}
-    buckets: dict[str, list[str]] = {"verified": [], "failed": [], "pending": []}
-    for req in major.required_prereqs:
-        entry = reported.get(_normalize_code(req))
-        if entry is None or entry.get("status") == "in_progress":
-            buckets["pending"].append(req)
+    buckets: dict[str, list[str]] = {
+        "verified": [], "in_progress": [], "failed": [], "missing": []
+    }
+    for group in major.required_prereqs:
+        entry = None
+        label = group[0]
+        for code in group:
+            candidate = reported.get(_normalize_code(code))
+            if candidate is not None:
+                entry, label = candidate, code
+                break
+        if entry is None:
+            buckets["missing"].append(label)
+        elif entry.get("status") == "in_progress":
+            buckets["in_progress"].append(label)
         elif _grade_meets_minimum(entry.get("grade"), major.min_prereq_grade):
-            buckets["verified"].append(req)
+            buckets["verified"].append(label)
         else:
-            buckets["failed"].append(req)
+            buckets["failed"].append(label)
     return buckets
 
 
-def _eligibility_band(major: CompetitiveMajor, gpa: float, completed_courses: list[dict]) -> str:
+def _gpa_status(value: float | None, minimum: float, margin: float) -> str:
+    """'clear_pass' / 'clear_fail' / 'unclear' -- unclear covers both an
+    unknown value and one sitting inside the margin band around the
+    cutoff, since neither can be safely called a pass."""
+    if value is None:
+        return "unclear"
+    if value < minimum - margin:
+        return "clear_fail"
+    if value >= minimum + margin:
+        return "clear_pass"
+    return "unclear"
+
+
+def _prereqs_status(prereqs: dict[str, list[str]]) -> str:
+    if prereqs["failed"]:
+        return "clear_fail"
+    if prereqs["missing"]:
+        return "unclear"
+    return "clear_pass"  # every requirement verified or acceptably in progress
+
+
+def _eligibility_band(
+    major: CompetitiveMajor, gpa: float, prereq_gpa: float | None, completed_courses: list[dict]
+) -> str:
     """Threshold-based, not a competitive ranking (confirmed directly
-    against the source), so a clean numeric distance from the cutoff is
+    against the source), so a clean numeric distance from each cutoff is
     the right model for "borderline" -- not an approximation of how a
     ranked applicant pool would be judged.
 
-    Simplification, documented rather than hidden: the state schema
-    collects one GPA figure, not separate cumulative/prerequisite GPAs,
-    so it's used as a proxy for both.
+    Cumulative GPA, prerequisite-specific GPA, and prerequisite
+    completion are three independent checks. A strong result on one
+    never substitutes for an unclear or failing result on another -- a
+    single collapsed GPA figure used as a stand-in for both thresholds
+    previously let a strong cumulative GPA mask a weak prerequisite GPA.
+    Any confirmed failure on any check makes the whole read
+    clearly_ineligible; every check has to clearly pass before the whole
+    read is clearly_eligible; anything else is borderline.
     """
-    threshold = min(major.cumulative_gpa_min, major.prereq_gpa_min)
     margin = major.borderline_margin
     prereqs = _classify_prereqs(major, completed_courses)
+    statuses = [
+        _gpa_status(gpa, major.cumulative_gpa_min, margin),
+        _gpa_status(prereq_gpa, major.prereq_gpa_min, margin),
+        _prereqs_status(prereqs),
+    ]
 
-    if gpa < threshold - margin:
+    if "clear_fail" in statuses:
         return "clearly_ineligible"
-    if prereqs["failed"] or prereqs["pending"]:
-        # GPA alone can look fine while a required prerequisite is a
-        # confirmed fail or still unresolved (in progress, or never
-        # reported) -- the real outcome isn't settled either way, so this
-        # is never clearly_eligible just because enough courses were named.
-        return "borderline"
-    if gpa >= threshold + margin:
+    if all(status == "clear_pass" for status in statuses):
         return "clearly_eligible"
     return "borderline"
 
 
-def _threshold_display(major: CompetitiveMajor) -> float:
-    return min(major.cumulative_gpa_min, major.prereq_gpa_min)
-
-
-def _borderline_reason(major: CompetitiveMajor, gpa: float, prereqs: dict[str, list[str]]) -> str:
-    threshold = _threshold_display(major)
+def _borderline_reason(
+    major: CompetitiveMajor, gpa: float, prereq_gpa: float | None, prereqs: dict[str, list[str]]
+) -> str:
     margin = major.borderline_margin
     parts = []
-    if threshold - margin <= gpa < threshold + margin:
-        parts.append(f"GPA {gpa} vs. a {threshold} minimum (margin {margin})")
+    if _gpa_status(gpa, major.cumulative_gpa_min, margin) == "unclear":
+        parts.append(f"cumulative GPA {gpa} close to the {major.cumulative_gpa_min} minimum")
+    if prereq_gpa is None:
+        parts.append("prerequisite-specific GPA not yet known")
+    elif _gpa_status(prereq_gpa, major.prereq_gpa_min, margin) == "unclear":
+        parts.append(f"prerequisite GPA {prereq_gpa} close to the {major.prereq_gpa_min} minimum")
     if prereqs["failed"]:
         parts.append(f"a below-minimum grade in {', '.join(prereqs['failed'])}")
-    if prereqs["pending"]:
-        parts.append(f"{', '.join(prereqs['pending'])} not yet confirmed complete")
+    if prereqs["missing"]:
+        parts.append(f"{', '.join(prereqs['missing'])} not yet reported")
     return "; ".join(parts) if parts else "the numbers reported"
 
 
-def _competitive_path(major: CompetitiveMajor, gpa: float, completed_courses: list[dict]) -> dict:
+def _competitive_path(
+    major: CompetitiveMajor, gpa: float, prereq_gpa: float | None, completed_courses: list[dict]
+) -> dict:
     # Everything above the interrupt() call must be pure/deterministic:
     # LangGraph re-runs this entire function from the top on resume, so an
     # LLM call or any other side effect placed before interrupt() would
     # run twice and could produce a different draft than what the student
     # already saw and responded to. See build_majors.py's docstring.
-    band = _eligibility_band(major, gpa, completed_courses)
+    band = _eligibility_band(major, gpa, prereq_gpa, completed_courses)
     prereqs = _classify_prereqs(major, completed_courses)
     recommendation = {
         "path": "apply",
@@ -162,7 +205,7 @@ def _competitive_path(major: CompetitiveMajor, gpa: float, completed_courses: li
                 "draft": recommendation,
                 "prompt": (
                     f"Your numbers are close to {major.display_name}'s "
-                    f"requirements ({_borderline_reason(major, gpa, prereqs)}). "
+                    f"requirements ({_borderline_reason(major, gpa, prereq_gpa, prereqs)}). "
                     "Want me to finalize this read, or would you rather work "
                     "on your numbers first?"
                 ),
@@ -199,19 +242,26 @@ def _competitive_path(major: CompetitiveMajor, gpa: float, completed_courses: li
             "answer": response.content[0].text,
         }
 
+    required_display = ", ".join(
+        group[0] if len(group) == 1 else f"{group[0]} (or {'/'.join(group[1:])})"
+        for group in major.required_prereqs
+    )
+
     facts = f"""Major: {major.display_name}
 College: {major.college}
 Cumulative GPA minimum: {major.cumulative_gpa_min}
 Prerequisite GPA minimum: {major.prereq_gpa_min}
 Minimum grade per prerequisite: {major.min_prereq_grade}
-Required prerequisites: {', '.join(major.required_prereqs)}
+Required prerequisites: {required_display}
 Prerequisites verified complete at/above the minimum grade: {', '.join(prereqs['verified']) or 'none'}
+Prerequisites in progress (allowed at application time per policy, not a problem): {', '.join(prereqs['in_progress']) or 'none'}
 Prerequisites completed below the minimum grade: {', '.join(prereqs['failed']) or 'none'}
-Prerequisites in progress or not yet reported: {', '.join(prereqs['pending']) or 'none'}
+Prerequisites not yet reported at all: {', '.join(prereqs['missing']) or 'none'}
 Application deadlines: Fall {major.application_deadlines.get('fall')}, Spring {major.application_deadlines.get('spring')}
 Source: {major.source_url}
 
-Student's reported GPA: {gpa}
+Student's reported cumulative GPA: {gpa}
+Student's reported prerequisite-specific GPA: {prereq_gpa if prereq_gpa is not None else 'not provided'}
 Student's reported courses: {completed_courses}
 Eligibility read: {band}
 """
@@ -222,17 +272,20 @@ Eligibility read: {band}
         system=(
             f"Compose a clear, honest answer for a student asking about "
             f"applying to {major.display_name}, a real competitive UofM "
-            "major. Use only the facts below -- including the exact college "
-            "name given, never a paraphrased or remembered version of it, "
-            "and the specific prerequisite breakdown (verified/below "
-            "minimum/pending), not just the overall eligibility read. If "
-            "any prerequisite is below the minimum grade or still pending, "
-            "name it specifically rather than giving a vague overall "
-            "answer. If the eligibility read is clearly_ineligible, say so "
-            "plainly -- never promise admission or soften it into false "
-            "hope. If clearly_eligible, confirm they meet the stated "
-            "criteria. State the real deadlines and cite the "
-            "source.\n\nFACTS:\n" + facts
+            "major described as a published GPA-threshold exception, not a "
+            "ranked or competitive process -- never call it 'competitive' "
+            "or imply applicants are ranked against each other. Use only "
+            "the facts below -- including the exact college name given, "
+            "never a paraphrased or remembered version of it -- and the "
+            "specific prerequisite breakdown, not just the overall "
+            "eligibility read. An in-progress prerequisite is normal and "
+            "allowed, not a problem to flag as a concern. If any "
+            "prerequisite is below the minimum grade or was never "
+            "reported, name it specifically. If the eligibility read is "
+            "clearly_ineligible, say so plainly -- never promise admission "
+            "or soften it into false hope. If clearly_eligible, confirm "
+            "they meet the stated criteria. State the real deadlines and "
+            "cite the source.\n\nFACTS:\n" + facts
         ),
         messages=[
             {"role": "user", "content": f"Am I eligible to apply for {major.display_name}?"}
@@ -252,4 +305,6 @@ def majors_recommend(state: MajorsState) -> dict:
 
     if competitive is None:
         return _declare_path(target_major)
-    return _competitive_path(competitive, state["gpa"], state["completed_courses"])
+    return _competitive_path(
+        competitive, state["gpa"], state.get("prereq_gpa"), state["completed_courses"]
+    )

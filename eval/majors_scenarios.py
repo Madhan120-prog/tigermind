@@ -32,8 +32,9 @@ SCENARIOS = [
             {
                 "kind": "message",
                 "content": (
-                    "My GPA is 3.6 and I've completed CHEM 1010 (A), "
-                    "BIOL 2010 (A), BIOL 2020 (B), BIOL 1230 (A), "
+                    "My cumulative GPA is 3.6 and my GPA specifically in my "
+                    "prerequisite courses is 3.5. I've completed CHEM 1010 "
+                    "(A), BIOL 2010 (A), BIOL 2020 (B), BIOL 1230 (A), "
                     "MATH 1530 (B), NUTR 2202 (A), EDPR 2111 (B)"
                 ),
             },
@@ -90,8 +91,9 @@ SCENARIOS = [
             {
                 "kind": "message",
                 "content": (
-                    "I want to apply to Nursing. My GPA is 3.6 and I "
-                    "completed CHEM 1010 (A), BIOL 2010 (A), BIOL 2020 (B), "
+                    "I want to apply to Nursing. My cumulative GPA is 3.6 "
+                    "and my prerequisite-specific GPA is 3.5. I completed "
+                    "CHEM 1010 (A), BIOL 2010 (A), BIOL 2020 (B), "
                     "BIOL 1230 (A), MATH 1530 (B), NUTR 2202 (A), "
                     "EDPR 2111 (B)"
                 ),
@@ -139,20 +141,48 @@ SCENARIOS = [
     {
         "name": "G - in-progress prerequisite (schema fix check)",
         "checks": (
-            "GPA 3.5, all prerequisites verified complete except one "
-            "explicitly in progress. Must be representable at all (the "
-            "old schema required a grade for every course) and should "
-            "land in borderline, not clearly_eligible, since one required "
-            "course isn't confirmed yet."
+            "GPA well above threshold on both cumulative and "
+            "prerequisite-specific figures, all prerequisites verified "
+            "complete except one explicitly in progress. Must be "
+            "representable at all (the old schema required a grade for "
+            "every course) and, per policy, an in-progress prerequisite is "
+            "not itself a borderline signal -- this should land in "
+            "clearly_eligible, not borderline, proving in-progress no "
+            "longer over-corrects into an automatic pause."
         ),
         "turns": [
             {
                 "kind": "message",
                 "content": (
-                    "I want to apply to Nursing. My GPA is 3.5. I've "
+                    "I want to apply to Nursing. My cumulative GPA is 3.5 "
+                    "and my prerequisite-specific GPA is 3.5. I've "
                     "completed CHEM 1010 (A), BIOL 2010 (A), BIOL 2020 (A), "
                     "BIOL 1230 (A), MATH 1530 (A), NUTR 2202 (A), and I'm "
                     "currently taking EDPR 2111 right now, not done yet"
+                ),
+            },
+        ],
+    },
+    {
+        "name": "H - strong cumulative GPA masking a weak prerequisite GPA (regression check)",
+        "checks": (
+            "Cumulative GPA 3.6 is well above the 3.0 threshold, but the "
+            "prerequisite-specific GPA is 2.5 -- clearly below it. A "
+            "single collapsed GPA figure previously let the strong "
+            "cumulative number stand in for both checks, scoring this "
+            "clearly_eligible. With cumulative and prerequisite GPA scored "
+            "independently, the failing prerequisite GPA should land this "
+            "in clearly_ineligible instead."
+        ),
+        "turns": [
+            {
+                "kind": "message",
+                "content": (
+                    "I want to apply to Nursing. My cumulative GPA is 3.6 "
+                    "but my GPA specifically in my prerequisite courses is "
+                    "2.5. I've completed CHEM 1010 (C), BIOL 2010 (C), "
+                    "BIOL 2020 (C), BIOL 1230 (C), MATH 1530 (C), "
+                    "NUTR 2202 (C), EDPR 2111 (C)"
                 ),
             },
         ],
