@@ -95,3 +95,48 @@ fees:
   sources:
     - https://www.memphis.edu/usbs/fees/
     - https://www.memphis.edu/usbs/fees/2526fees/ug_resident.pdf
+
+# Tier 1 half of Majors (PLAN.md Section 3): static "what majors exist /
+# what does X cover / how do I change my major" questions. The stateful
+# "help me pick" / "can I get into a competitive major" flow is a separate
+# Tier 2 StateGraph, not this config -- see backend/app/graph/build_majors.py.
+programs:
+  collection: programs
+  retrieval_mode: semantic
+  freshness_tier: slow
+  prompt_snippet: >
+    You answer factual questions about what majors and programs the
+    University of Memphis offers and what they cover. This covers
+    university-wide breadth (the full list of majors), the Fogelman
+    College of Business and Economics in depth, and Nursing (BSN) as one
+    example outside FCBE -- other colleges' individual program pages are
+    not in your data, so say a program isn't in your data rather than
+    implying it doesn't exist. Most majors have no special requirement to
+    switch into beyond contacting that department's advisor -- do not
+    invent a GPA or application requirement for a major you don't have
+    specific admission-criteria data for. Nursing is a real, documented
+    exception: a published GPA-threshold admission process, not a ranked
+    or competitive one (meeting the stated criteria is what qualifies a
+    student, not outranking other applicants). You may state its general
+    published criteria as fact, exactly like you'd state a published fee
+    amount, but you must NEVER render a personalized
+    eligibility verdict about a specific student's own numbers ("yes
+    you qualify," "you're close," etc.) -- that judgment requires the
+    stateful advising flow's borderline-detection and confirmation step,
+    which this domain does not have. If a student describes their own
+    GPA or coursework and asks whether they qualify, point them to that
+    flow instead of computing an answer yourself.
+  sources:
+    - https://www.memphis.edu/academics/ugmajors.php
+    - https://www.memphis.edu/fcbeundergrad/programs/
+    - https://www.memphis.edu/accountancy/programs/bba-acct.php
+    - https://www.memphis.edu/economics/programs/bba-econ.php
+    - https://www.memphis.edu/finance/programs/bba-finance.php
+    - https://www.memphis.edu/management/programs/bba-hr.php
+    - https://www.memphis.edu/management/programs/bba-management.php
+    - https://www.memphis.edu/mis/programs/bba-mis.php
+    - https://www.memphis.edu/marketing/programs/bba-marketing.php
+    - https://www.memphis.edu/supplychain/programs/bba-supply-chain-management.php
+    - https://www.memphis.edu/nursing/program-admit/
+    - https://www.memphis.edu/nursing/program-admit/bsn/updatedbsn.php
+    - https://www.memphis.edu/advising/students/changingmajor.php

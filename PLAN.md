@@ -44,28 +44,37 @@ questions, find where it breaks, fix it, document the fix.
 These must be load-bearing, not decorative — see
 `.claude/rules/langgraph-checklist.md`:
 
-- [ ] A checkpointer persists the Majors agent's intake state across turns.
+- [x] A checkpointer persists the Majors agent's intake state across turns.
+      Verified in Phase 3: `MemorySaver`, proven with a real multi-call
+      test where turn 1's extracted interests survive into turn 2 without
+      being restated (`eval/majors_scenarios.py` Scenario A).
 - [ ] Conditional edges genuinely change the graph's shape based on router
-      output (single-domain vs. multi-domain vs. action-request).
-- [ ] `interrupt()` gates the Majors GPA/prereq recommendation **and** any
-      Phase 6 drop/add action — this is no longer a stretch goal. An agent
-      that can take real actions but pauses for human confirmation before
-      anything irreversible is the actual differentiator of this project.
+      output (single-domain vs. multi-domain vs. action-request). Still
+      Phase 4 work — but Majors' own intake→recommend edge is a working,
+      verified instance of the same underlying mechanism (Scenario B:
+      no GPA stays on intake, GPA supplied moves to recommend), a
+      smaller-scoped proof the router-level version can build on.
+- [x] `interrupt()` gates the Majors GPA/prereq recommendation. Verified
+      in Phase 3 against a real, borderline case (Scenarios C/C2): fires
+      only when eligibility is genuinely borderline, not for a clearly
+      eligible or clearly ineligible case (D/E), and both confirming and
+      declining the pause behave correctly. Phase 6's drop/add gate is
+      the same pattern, not yet built.
 
 ---
 
 ## 3. System Overview — Three Tiers, Not One Agent Per Domain
 
-Eight of the ten domains are structurally identical: retrieve from a
-domain-scoped Chroma collection, cite sources, answer. Hand-writing eight
+Nine of the eleven domains are structurally identical: retrieve from a
+domain-scoped Chroma collection, cite sources, answer. Hand-writing nine
 near-duplicate LangGraph nodes for that is both bad engineering (violates
 DRY for no reason) and a worse portfolio story ("copy-pasted the same agent
-eight times" vs. "built one configurable agent and scaled it to eight
+nine times" vs. "built one configurable agent and scaled it to nine
 domains via config"). So:
 
 | Tier | Domains | Shape | Why bespoke code (or not) |
 |---|---|---|---|
-| **1 — Generic retrieval agent** | Housing, Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course Catalog | One function, parameterized by a domain config entry (collection name, retrieval mode, prompt snippet) | No new logic per domain — adding a domain means running ingestion + adding one config entry, not writing an agent |
+| **1 — Generic retrieval agent** | Housing, Fees, Faculty, Flyers, Events, Exams/Deadlines, Student Employment, Course Catalog, Programs | One function, parameterized by a domain config entry (collection name, retrieval mode, prompt snippet) | No new logic per domain — adding a domain means running ingestion + adding one config entry, not writing an agent |
 | **2 — Majors (flagship)** | Majors advising | Stateful multi-turn intake + recommendation | The only public-info domain where the *process* (declare vs. apply, GPA/prereq eligibility) requires state held across turns — this is what justifies LangGraph's state primitives in Tier 1's absence |
 | **3 — SIS actions (Phase 6, SSO-gated)** | My classes, drop/add, bursar balance | Stateful + agent takes real write actions | The only tier where the agent *does* something instead of *answering* something — requires auth, a confirm-before-execute HITL gate, and is explicitly the last phase built |
 
@@ -88,8 +97,9 @@ Don't conflate them — most Majors questions are actually Tier 1.
 | Events | 1 | Semantic + dates | Freshness-critical |
 | Exams / Deadlines | 1 | Structured | Academic calendar; freshness-critical |
 | Student Employment | 1 | Semantic | On-campus jobs, work-study postings |
-| Course Catalog / Programs listing | 1 | Hybrid | Course codes = structured; program descriptions = semantic. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
-| **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility, per-college process |
+| Course Catalog | 1 | Hybrid | Course codes = structured. **Blocked — see 17.12.** `catalog.memphis.edu` sits behind an AWS WAF JS challenge and the Banner alternative is not publicly reachable |
+| Programs (Majors Tier 1) | 1 | Semantic | "What majors exist / what does X cover / how do I change my major" — built in Phase 3, resolves 17.3. Own collection, unaffected by Course Catalog's block |
+| **Majors advising** | **2** | Stateful + semantic | Declare vs. apply, GPA/prereq eligibility. One verified competitive-major ruleset (Nursing) built in Phase 3 — see `docs/domain-research/majors.md` |
 | **My Classes / Drop-Add / Bursar** | **3** | Stateful + action | Phase 6 only. Mocked SSO + SIS — see Section 8 |
 
 ---
@@ -204,8 +214,11 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
 - One generic domain-agent function, not one function per domain — see
   Section 3. If a "specialist" starts accumulating domain-specific
   branches, that's a signal it belongs in Tier 2/3, not a config entry.
-- Small, single-responsibility node functions; typed Pydantic state
-  schemas for every graph's state.
+- Small, single-responsibility node functions; typed `TypedDict` state
+  schemas for every graph's state — corrected from "Pydantic" in an
+  earlier draft, which the shipped code (`GraphState`, `MajorsState`)
+  never actually followed; matching what exists rather than leaving the
+  doc/code mismatch for the next phase to inherit silently.
 - No dead code, no speculative abstractions for domains that don't exist
   yet — add the fourth generic domain by adding a config entry, not by
   refactoring in anticipation of it.
@@ -265,8 +278,9 @@ guardrails design depends on.
 |---|---|
 | Housing | `memphis.edu/reslife` |
 | Fees / Financial | `memphis.edu/usbs`, `memphis.edu/financialaid/consumer_info.php` |
-| Course Catalog / Programs | `catalog.memphis.edu` |
-| Majors advising | Per-college advising pages + `umdegree.memphis.edu` |
+| Course Catalog | `catalog.memphis.edu` — still blocked, see 17.12 |
+| Programs (Majors Tier 1) | `memphis.edu/academics/ugmajors.php`, `memphis.edu/fcbeundergrad/programs/`, Loewenberg Nursing's general program page, `memphis.edu/advising/students/changingmajor.php` |
+| Majors advising (Tier 2) | `memphis.edu/nursing/program-admit/bsn/updatedbsn.php` for the one verified competitive-major ruleset (Nursing), plus `changingmajor.php` for the declare path. `umdegree.memphis.edu` removed from this row — confirmed SSO-gated, not fetchable at all |
 | Faculty | Each department's public directory page |
 | Flyers / Announcements | Campus news / department announcement pages |
 | Events | `memphis.edu/events` (or campus calendar equivalent) |
@@ -403,7 +417,7 @@ vector DB" projects:
    right now, and most portfolio projects never get past read-only Q&A.
 4. **An eval harness that gates merges in CI** — a Definition of Done
    enforced automatically, not "I tested it manually once."
-5. **A config-driven generic agent instead of eight copy-pasted
+5. **A config-driven generic agent instead of nine copy-pasted
    specialists** — reads as engineering judgment (recognizing and
    collapsing duplication) rather than "AI hobbyist wrote a chatbot per
    feature."
@@ -435,12 +449,14 @@ applies uniformly." The config shape can't currently express that.
 *Decide:* per-chunk freshness override at ingestion time, or accept
 per-domain granularity and document the limitation.
 
-**17.3 — Does `programs` own its own collection?** *(deferred with Course
-Catalog — no longer blocks Phase 2.)*
-Section 3 implies a distinct `programs` collection for static "what majors
-exist" lookups; Section 4 folds Programs into the Course Catalog row.
-One of the two is wrong, and `domains.yaml` needs a single answer whenever
-a programs corpus actually exists. Blocked behind 17.12 either way.
+**17.3 — RESOLVED in Phase 3.** `programs` is its own Tier-1 collection,
+decoupled from the still-blocked Course Catalog (17.12) — Section 3 was
+right, Section 4's folding of Programs into the Course Catalog row was
+the error. Sources have nothing to do with `catalog.memphis.edu`'s WAF
+block: `academics/ugmajors.php` (university-wide breadth), FCBE's 8
+majors (depth, same college Faculty covers), Nursing's general program
+page, and the general major-change process page. Built as a normal
+`domains.yaml` entry, zero new agent code, per Section 3's own claim.
 
 **17.5 — Events may not be one Tier-1 domain at all.** *(deferred with
 the domain — no longer blocks Phase 2.)*
@@ -453,12 +469,32 @@ Events was deferred out of Phase 2.
 
 ### Blocking Phase 3
 
-**17.6 — Majors has no Phase 0 research and no eval rows.**
-`docs/domain-research/majors.md` is still an unfilled template, and
-`eval/eval_set.csv` has 40 rows across the eight Tier-1 domains and zero
-for Majors. Majors is the Tier-2 flagship and the stated justification for
-LangGraph's state primitives (Section 3), so Phase 3 currently has no
-foundation under it. Phase 0 was closed without this deliverable.
+**17.6 — RESOLVED in Phase 3.** `docs/domain-research/majors.md` is filled
+in with directly-verified research (real Nursing GPA/deadline numbers,
+`umdegree.memphis.edu` found unusable). Eval coverage now exists on both
+halves: 5 `eval_set.csv` rows for the Tier-1 `programs` domain, and 9
+scenarios in `eval/majors_scenarios.py` covering the stateful Tier-2 flow
+(checkpointer persistence, the conditional edge, `interrupt()` firing
+correctly on a real borderline case and correctly not firing on clearly
+eligible/ineligible cases, real course-code/grade matching against
+false-positive course counting, in-progress prerequisites being
+representable and not auto-borderline, and cumulative vs.
+prerequisite-specific GPA being scored independently).
+
+**New, found during Phase 3 — other competitive majors are an explicit
+deferral, not a gap.** Only Nursing has a verified real eligibility
+ruleset (`backend/app/config/competitive_majors.yaml`); any other major
+gets the plain declare-path answer. Adding a second competitive major is
+a config entry plus its own verified research, not new code — same claim
+Tier-1 domains already make about `domains.yaml`.
+
+**New, found during Phase 3 — the durable checkpointer backend is an
+explicit deferral.** `MemorySaver` (already available, zero new
+dependencies) satisfies the checklist's actual bar ("survive between
+separate invocations") but is lost on process restart — verified
+directly by killing and restarting the server. A durable backend
+(`langgraph-checkpoint-sqlite`) is a documented upgrade path, not added
+speculatively, per the project's minimize-dependencies rule.
 
 ### Blocking Phase 5
 

@@ -1,0 +1,47 @@
+# The one verified real competitive-major ruleset (see
+# docs/domain-research/majors.md's scope decision -- deliberately not
+# generalized to majors this project hasn't researched). A major not
+# listed here gets the plain declare-path answer, correct for the
+# overwhelming majority of real UofM majors.
+#
+# Numbers verified directly against the current, live admission page.
+# An earlier page (howtoapply.php) gave different numbers and now 404s --
+# these figures need a recheck each admission cycle, not a one-time
+# capture. See source_url below.
+
+nursing:
+  display_name: Nursing (BSN)
+  college: Loewenberg College of Nursing
+  aliases: [nursing, bsn, nurse, nursing program]
+  cumulative_gpa_min: 3.0
+  prereq_gpa_min: 3.0
+  min_prereq_grade: C
+  # Not a calibrated number -- a starting band for "close enough to the
+  # cutoff that a human should confirm the read before it's treated as
+  # final." Admission itself is threshold-based, not ranked, so a clean
+  # numeric distance from the cutoff is the right model for "borderline"
+  # here (unlike, say, a competitive-ranking scenario where a margin
+  # wouldn't mean the same thing).
+  borderline_margin: 0.2
+  # Each requirement is a list of course codes that all satisfy it --
+  # most have exactly one, chemistry has two accepted alternatives per
+  # the source. A student reporting either one must count as meeting the
+  # requirement, not "pending" for having taken the "wrong" equivalent.
+  required_prereqs:
+    - [CHEM 1010, CHEM 1110]
+    - [BIOL 2010]
+    - [BIOL 2020]
+    - [BIOL 1230]
+    - [MATH 1530]
+    - [NUTR 2202]
+    - [EDPR 2111]
+  application_deadlines:
+    fall: February 15
+    spring: September 1
+  source_url: https://www.memphis.edu/nursing/program-admit/bsn/updatedbsn.php
+  notes: >
+    Threshold-based admission, not ranked/competitive -- meeting the
+    stated criteria guarantees consideration. Prerequisites may be
+    "in progress," not necessarily complete, at the time of application --
+    this is normal and explicitly allowed by the source, not itself a
+    borderline signal.
