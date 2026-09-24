@@ -1,7 +1,8 @@
 import re
 
+from app.agents.generic_domain_agent import generic_domain_agent, retry_constraint_for
 from app.config.loader import get_domain
-from app.graph.state import GraphState
+from app.graph.app_state import AppState
 
 # Chroma L2 distance on normalized sentence-transformer embeddings.
 # Starting value -- needs calibration against real eval results, not tuned yet.
@@ -80,49 +81,169 @@ def _triggered_deferral(question: str, deferrals: list[dict]) -> dict | None:
     return None
 
 
-def guardrails(state: GraphState) -> dict:
-    domain_name = state["domain"]
-    config = get_domain(domain_name)
-    hits = state["retrieved"]
-    answer = state["answer"]
+def _deferral_response(domain_name: str, deferral: dict, sources: list[str]) -> dict:
+    return {
+        "domain": domain_name,
+        "deferred": True,
+        "confidence_ok": True,
+        "answer": DEFERRAL_TEMPLATE.format(
+            because=" ".join(deferral["because"].split()),
+            refer_to=" ".join(deferral["refer_to"].split()),
+        ),
+        "sources": sources,
+    }
 
-    # Before confidence or freshness: if the question is one this domain must
-    # not answer, retrieval quality is irrelevant. A confident, well-cited
-    # answer is the dangerous outcome here, not the safe one.
-    deferral = _triggered_deferral(state["question"], config.deferrals) or (
-        _asserts_figure_on_deferred_topic(answer, config.deferrals)
-    )
-    if deferral is not None:
-        return {
-            "deferred": True,
-            "confidence_ok": True,
-            "answer": DEFERRAL_TEMPLATE.format(
-                because=" ".join(deferral["because"].split()),
-                refer_to=" ".join(deferral["refer_to"].split()),
-            ),
-            "sources": state["sources"],
-        }
+
+def check_domain(
+    domain_name: str,
+    question: str,
+    hits: list[dict],
+    answer: str,
+    sources: list[str],
+    regenerate=None,
+) -> dict:
+    """The actual per-domain guardrail: deferral checks, then the
+    confidence gate. Runs once per active domain, before any multi-domain
+    synthesis -- a low-confidence or deferred sub-answer must be settled
+    here, not handed to a synthesizer that could smooth it into fluent,
+    confident-sounding prose and launder exactly the kind of fabricated
+    figure this check exists to catch.
+
+    Two different deferral checks, deliberately not treated the same way
+    (PLAN.md 17.13): if the STUDENT's question triggers a deferral topic,
+    deferring immediately is correct -- there's nothing to retry. If the
+    ANSWER volunteers a figure on a topic the question never raised, that's
+    the model breaking its own instruction not to, and discarding a
+    possibly-correct, unrelated answer outright is the wrong fix for a
+    prompting failure. `regenerate(deferral) -> str`, when given, gets one
+    chance to produce a clean answer with the violation restated before
+    this actually defers -- guardrails becomes a net with one retry in it,
+    not a hard stop on the model's first mistake.
+    """
+    config = get_domain(domain_name)
+
+    triggered = _triggered_deferral(question, config.deferrals)
+    if triggered is not None:
+        return _deferral_response(domain_name, triggered, sources)
+
+    volunteered = _asserts_figure_on_deferred_topic(answer, config.deferrals)
+    if volunteered is not None and regenerate is not None:
+        answer = regenerate(volunteered)
+        volunteered = _asserts_figure_on_deferred_topic(answer, config.deferrals)
+    if volunteered is not None:
+        return _deferral_response(domain_name, volunteered, sources)
 
     best_distance = min((h["distance"] for h in hits), default=float("inf"))
-    confidence_ok = best_distance <= CONFIDENCE_DISTANCE_THRESHOLD
+    confidence_ok = best_distance <= CONFIDENCE_DISTANCE_THRESHOLD and bool(sources)
 
     if not confidence_ok:
         return {
+            "domain": domain_name,
             "deferred": False,
             "confidence_ok": False,
             "answer": NO_CONFIDENT_ANSWER.format(domain=domain_name),
             "sources": [],
         }
 
-    if not state["sources"]:
-        return {
-            "deferred": False,
-            "confidence_ok": False,
-            "answer": NO_CONFIDENT_ANSWER.format(domain=domain_name),
-        }
+    return {
+        "domain": domain_name,
+        "deferred": False,
+        "confidence_ok": True,
+        "answer": answer,
+        "sources": sources,
+    }
 
-    needs_disclaimer = config.freshness_tier == "fast" or DOLLAR_OR_DATE_PATTERN.search(answer)
-    if needs_disclaimer:
+
+def domain_guardrail_check(state: AppState) -> dict:
+    """Fan-out branch node: runs check_domain for this one Send'd domain
+    and joins its result into the shared domain_results list."""
+    def regenerate(deferral: dict) -> str:
+        return generic_domain_agent(state, extra_constraint=retry_constraint_for(deferral))["answer"]
+
+    checked = check_domain(
+        state["domain"], state["question"], state["retrieved"], state["answer"], state["sources"],
+        regenerate=regenerate,
+    )
+    return {"domain_results": [checked]}
+
+
+def _majors_guardrails(state: AppState) -> dict:
+    """Majors' final answers never went through any shared guardrail check
+    before this -- architecture.md says guardrails run "on every path,
+    including Tier-3" (by extension Tier 2), and this closes that gap.
+
+    The declined-borderline acknowledgment is a special case: majors_recommend
+    deliberately shows it no eligibility facts at all ("nothing to soften if
+    the model never sees them"), so there's nothing here for a confidence or
+    citation check to mean anything about.
+    """
+    if state.get("recommendation_confirmed") is False:
+        return {"answer": state["answer"], "sources": [], "confidence_ok": True, "deferred": False}
+
+    answer = state["answer"]
+    sources = state.get("sources", [])
+    recommendation = state.get("recommendation") or {}
+
+    if recommendation.get("path") == "declare":
+        # This path retrieves from the programs collection just like a
+        # Tier-1 domain question would -- same confidence gate.
+        checked = check_domain("programs", state["question"], state.get("retrieved", []), answer, sources)
+        answer, sources = checked["answer"], checked["sources"]
+        confidence_ok, deferred = checked["confidence_ok"], checked["deferred"]
+    else:
+        # The competitive-eligibility path is pure config lookup, no
+        # retrieval -- no confidence gate to apply, but it must still cite
+        # something (it always embeds major.source_url when it gets here).
+        confidence_ok, deferred = bool(sources), False
+
+    if confidence_ok and DOLLAR_OR_DATE_PATTERN.search(answer):
+        # Nursing's GPA cutoffs are just as liable to change semester to
+        # semester as a dollar figure or a date -- and every finalized
+        # answer here states real deadlines (month names), which this
+        # pattern already catches.
         answer = answer + FRESHNESS_DISCLAIMER
 
-    return {"deferred": False, "confidence_ok": True, "answer": answer}
+    return {"answer": answer, "sources": sources, "confidence_ok": confidence_ok, "deferred": deferred}
+
+
+def guardrails(state: AppState) -> dict:
+    """Final node, reached whether one Tier-1 domain answered directly,
+    several were merged by the synthesizer, or Majors produced a final
+    recommendation. Per-domain deferral/confidence checks for Tier-1
+    already happened in domain_guardrail_check -- this node only
+    aggregates across however many domains were involved, decides on and
+    appends a single freshness disclaimer (never one per domain, so a
+    synthesized answer doesn't repeat the same note two or three times),
+    and does a final citation sanity check.
+    """
+    if state.get("route") == "majors":
+        return _majors_guardrails(state)
+
+    results = state["domain_results"]
+
+    if len(results) == 1:
+        answer, sources = results[0]["answer"], results[0]["sources"]
+    else:
+        answer, sources = state["answer"], state["sources"]
+
+    confidence_ok = all(r["confidence_ok"] for r in results)
+    deferred = any(r["deferred"] for r in results)
+
+    # A confident answer with nothing to cite is a contradiction, not a
+    # pass -- matches the single-domain path's own belt-and-suspenders
+    # check before this node existed.
+    if confidence_ok and not sources:
+        confidence_ok = False
+
+    if confidence_ok:
+        # Based on the non-deferred domains only -- one domain deferring
+        # doesn't mean a genuine dollar figure another domain stated in
+        # the same synthesized answer stops needing its disclaimer.
+        non_deferred_domains = {r["domain"] for r in results if not r["deferred"]}
+        needs_disclaimer = any(
+            get_domain(d).freshness_tier == "fast" for d in non_deferred_domains
+        ) or DOLLAR_OR_DATE_PATTERN.search(answer)
+        if needs_disclaimer:
+            answer = answer + FRESHNESS_DISCLAIMER
+
+    return {"answer": answer, "sources": sources, "confidence_ok": confidence_ok, "deferred": deferred}

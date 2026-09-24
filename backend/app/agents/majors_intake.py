@@ -3,7 +3,7 @@ import os
 import anthropic
 
 from app.config.competitive_majors import match_competitive_major
-from app.graph.majors_state import MajorsState
+from app.graph.app_state import AppState
 
 _client = None
 
@@ -107,7 +107,7 @@ def _competitive_clarifying_question(major_name: str, gpa, prereq_gpa, completed
     return ""
 
 
-def majors_intake(state: MajorsState) -> dict:
+def majors_intake(state: AppState) -> dict:
     """Re-derives the full known state from the whole conversation each
     turn, rather than incrementally merging one message at a time -- this
     avoids stale fields drifting out of sync with what the student has

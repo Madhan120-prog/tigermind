@@ -48,12 +48,16 @@ These must be load-bearing, not decorative — see
       Verified in Phase 3: `MemorySaver`, proven with a real multi-call
       test where turn 1's extracted interests survive into turn 2 without
       being restated (`eval/majors_scenarios.py` Scenario A).
-- [ ] Conditional edges genuinely change the graph's shape based on router
-      output (single-domain vs. multi-domain vs. action-request). Still
-      Phase 4 work — but Majors' own intake→recommend edge is a working,
-      verified instance of the same underlying mechanism (Scenario B:
-      no GPA stays on intake, GPA supplied moves to recommend), a
-      smaller-scoped proof the router-level version can build on.
+- [x] Conditional edges genuinely change the graph's shape based on router
+      output (single-domain vs. multi-domain vs. action-request). Done in
+      Phase 4: a real tool-calling router determines whether a turn enters
+      Tier-1 (fanning out via `Send` to one or more domains, synthesizing
+      only when more than one fires), the Majors state machine, or a
+      deterministic out-of-scope answer — verified live for all three
+      shapes (`eval/router_scenarios.py`). The action-request (Tier-3)
+      shape isn't part of this yet; it doesn't exist until Phase 6. Majors'
+      own intake→recommend edge (Scenario B) remains a smaller, separately
+      verified instance of the same mechanism.
 - [x] `interrupt()` gates the Majors GPA/prereq recommendation. Verified
       in Phase 3 against a real, borderline case (Scenarios C/C2): fires
       only when eligibility is genuinely borderline, not for a clearly
@@ -106,34 +110,56 @@ Don't conflate them — most Majors questions are actually Tier 1.
 
 ## 5. Architecture
 
+**As built in Phase 4** — one router-driven graph (`build_app_graph()`)
+behind the single `/ask` endpoint, replacing the separate Tier-1/Majors
+entry points Phases 1-3 shipped:
+
 ```mermaid
 graph TB
-    Q["Student question"] --> AUTH{"Requires SSO?<br/>(my classes / drop-add / bursar)"}
+    Q["Student question"] --> R["Router node<br/>tool-calling: route = tier1 / majors / unclear<br/>(+ active domain(s) when tier1)"]
 
-    AUTH -- no --> R["Router node<br/>LLM classifies intent → active domain(s)"]
-    AUTH -- yes, not logged in --> LOGIN["Prompt to authenticate<br/>(mock SSO)"]
-    AUTH -- yes, logged in --> SIS["SIS action agent<br/>(stateful + interrupt() before writes)"]
+    R -- unclear --> OUT1["Deterministic fallback answer<br/>(bypasses guardrails -- nothing to check)"]
 
-    R --> GEN["Generic domain agent<br/>(config-driven: Housing/Fees/Faculty/<br/>Flyers/Events/Exams/Employment/Catalog)"]
-    R --> M["Majors agent<br/>(stateful intake + interrupt() gate)"]
+    R -- majors --> MI["majors_intake<br/>(stateful, re-derives from full history each turn)"]
+    MI -- not ready --> OUT2["Clarifying question<br/>(bypasses guardrails)"]
+    MI -- ready --> MR["majors_recommend<br/>(interrupt() gate on a borderline case)"]
+    MR --> G
 
-    GEN --> D{"More than one<br/>domain active?"}
-    M --> D
-
-    D -- yes --> S["Synthesizer node<br/>(cross-domain merge)"]
-    D -- no --> G["Guardrails node"]
+    R -- "tier1, Send per domain" --> GEN["generic_domain_agent<br/>(config-driven, one call per active domain)"]
+    GEN --> CHK["Per-domain guardrail check<br/>(deferral trigger + confidence gate,<br/>runs before any synthesis)"]
+    CHK --> D{"More than one<br/>domain active?"}
+    D -- yes --> S["Synthesizer node<br/>(merges already-checked answers)"]
+    D -- no --> G
     S --> G
 
-    SIS --> G
-
-    G["Guardrails node<br/>citation check · confidence gate ·<br/>freshness disclaimers · deferrals"] --> OUT["Response + source links"]
+    G["Guardrails node<br/>aggregate confidence/deferred ·<br/>one freshness disclaimer · citation check"] --> OUT3["Response + source links"]
 ```
 
-The router returns the *list* of active Tier-1/Tier-2 domains; the
-synthesizer fires only when that list has more than one entry. Tier-3 (SIS)
-requests short-circuit straight to the SIS action agent after an auth
-check, bypass the multi-domain synthesizer, but still pass through
-guardrails before returning.
+**Not yet built (Phase 6): the SSO/auth gate and the SIS action agent.**
+Every question reaches the router directly today — there is no "requires
+login" branch yet, since Tier-3 doesn't exist. When Phase 6 lands, an auth
+check will sit in front of the router exactly as this section originally
+planned, short-circuiting SIS-flavored requests before they ever reach it.
+
+The router classifies every turn against the full conversation history,
+not just the latest message — the same property `majors_intake` already
+needed since Phase 3, for the same reason: a bare follow-up like "my GPA
+is 3.6" only makes sense in light of what came before. Multi-domain
+fan-out uses `langgraph.types.Send`, one `generic_domain_agent` call per
+active domain, joined before the synthesizer decision so a low-confidence
+or deferred sub-answer is settled *before* an LLM ever tries to merge it
+with another domain's answer — never after, which is what would let
+synthesis smooth a deferral into fabricated-sounding confidence.
+`unclear` and Majors' "not ready yet" clarifying question both bypass
+guardrails entirely — there's no retrieval or citation in either to
+check. Everything else, including Majors' final recommendation
+(new in Phase 4 — it never passed through a shared guardrail check
+before), passes through one shared guardrails node before returning.
+
+A genuinely compound Tier-1-and-Majors question in one turn (e.g. "how
+much is South Hall, and can I get into Nursing with my GPA") is not
+handled as one synthesized answer — `route` is always exactly one of
+`tier1`/`majors`/`unclear`, never a combination. See 17.x below.
 
 ---
 
@@ -216,9 +242,11 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
   branches, that's a signal it belongs in Tier 2/3, not a config entry.
 - Small, single-responsibility node functions; typed `TypedDict` state
   schemas for every graph's state — corrected from "Pydantic" in an
-  earlier draft, which the shipped code (`GraphState`, `MajorsState`)
-  never actually followed; matching what exists rather than leaving the
-  doc/code mismatch for the next phase to inherit silently.
+  earlier draft, which the shipped code never actually followed; matching
+  what exists rather than leaving the doc/code mismatch for the next
+  phase to inherit silently. As of Phase 4, one `AppState` schema backs
+  the single router-driven graph behind `/ask` (superseding the separate
+  `GraphState`/`MajorsState` Phases 1-3 shipped).
 - No dead code, no speculative abstractions for domains that don't exist
   yet — add the fourth generic domain by adding a config entry, not by
   refactoring in anticipation of it.
@@ -349,9 +377,13 @@ semantic search today.
 `StateGraph` with `{interests, gpa, completed_courses}` state, intake
 node, checkpointer, `interrupt()`-gated declare-vs-apply recommendation.
 
-### Phase 4 — Router, Synthesizer, Guardrails (2-3 days)
+### Phase 4 — Router, Synthesizer, Guardrails (2-3 days, ran longer)
 Wire Tier-1 + Tier-2 together: router → conditional synthesizer →
-guardrails (freshness disclaimers tuned per Section 7's two tiers).
+guardrails (freshness disclaimers tuned per Section 7's two tiers). Scope
+grew past the original estimate once "wire together" was decided to mean
+one real unified `/ask` (Section 5) rather than a router in front of
+Tier-1 only with Majors left separate — plus the 17.13 constrained-retry
+fix, already committed to for this phase, landed here too.
 
 ### Phase 5 — Eval, CI, Documentation (2-3 days)
 Full eval pass across all built domains. Wire `eval/run_eval.py` into
@@ -560,9 +592,8 @@ to avoid, for the domain that adds the least capability. Course Catalog
 stays deferred unless a sanctioned bulk source appears (an official data
 feed, or a PDF catalog export that is not challenged).
 
-**17.13 — A deferral can cost a sound answer, because the check fires
-after generation.** *(Partly addressed in Phase 2; the remaining half is
-Phase 4 work.)*
+**17.13 — RESOLVED in Phase 4.** A deferral can cost a sound answer,
+because the check fires after generation.
 
 Deferral triggers match the student's question, so "can international
 students work more during breaks" defers correctly. But "how many hours can
@@ -578,19 +609,22 @@ the check tripping over itself: a source URL containing "international",
 the referred office's own room and phone number, and the trigger `f-1`
 containing a digit that satisfied its own proximity test.
 
-**The remaining cost:** when the model volunteers a figure anyway, the
-whole answer is replaced by a deferral, so "how many hours a week can I
-work on campus" loses its correct 25-hour domestic answer. That question is
-a standing eval failure, deliberately left failing rather than having its
-expectation rewritten to match the behaviour.
-
-*The fix is a constrained retry:* guardrails routes back to the agent once
-with the violated constraint restated, and only defers if the second
-attempt also violates it. That is a conditional edge that genuinely changes
-the graph's shape -- item 2 on `.claude/rules/langgraph-checklist.md` --
-arrived at from a real defect rather than invented to satisfy the checklist.
-Deliberately deferred to Phase 4 so the retry is designed alongside the
-router rather than built twice. Related to 17.11.
+**Fixed in Phase 4 with a constrained retry**, built alongside the router
+as planned: `check_domain` (`backend/app/graph/guardrails.py`) now treats
+the two deferral checks differently -- a question that directly triggers a
+deferral topic still defers immediately (correct, nothing to retry), but
+when only the *answer* volunteers a figure the question never asked about,
+`generic_domain_agent` gets called exactly once more with the violated
+constraint restated (`retry_constraint_for`), and only defers for real if
+the second attempt still volunteers it. Verified live: repeated runs of
+"how many hours a week can I work on campus" now often recover the correct
+25-hour domestic answer instead of losing it to the deferral every time,
+while "can international students work more during breaks" (a real
+question-triggered deferral) still defers immediately, unaffected. Not a
+100% fix -- the retry can still fail if the model volunteers the figure
+twice in a row, which is the expected, accepted behavior of "one retry,"
+not a bug (related to 17.11's note that eval verdicts aren't
+deterministic).
 
 **17.14 -- Fees built out the hybrid slot; two shared bugs surfaced and
 were fixed for every domain, not just this one.**
@@ -632,3 +666,37 @@ Faculty"), so this one page silently yields zero chunks. Likely a one-off
 markup inconsistency on the source page rather than a pipeline defect,
 given 99 of 100 pages extract correctly with the same code. Left as a
 known gap rather than special-cased for one page.
+
+**17.15 — New, found during Phase 4. A genuinely compound Tier-1 +
+Majors question in one turn is not handled as one answer.** *Deliberate
+scope boundary, not a bug.*
+
+The router's `route` is always exactly one of `tier1` / `majors` /
+`unclear`, never a combination. A question like "how much is South Hall,
+and can I get into Nursing with my 3.6 GPA" gets routed as a whole to
+whichever the router judges the dominant intent (in practice, `majors`,
+since it contains personalized eligibility language) -- the housing half
+either gets folded into that turn's Majors conversation awkwardly or
+dropped, rather than genuinely answering both halves the way a two-domain
+Tier-1 question (e.g. housing + student employment) already does via the
+synthesizer. `PLAN.md` Section 5's architecture diagram has never shown
+Tier-1 and Majors merging into one synthesized answer, so this isn't a
+regression from what was planned -- it's calling out explicitly, now that
+the router actually exists, a case its design was never meant to cover.
+Revisit only if a real student question turns out to need it; not
+speculatively built now.
+
+**17.16 — New, found during Phase 4. The router now runs (Opus) on every
+turn of an in-progress Majors conversation, not just the first message.**
+*Accepted cost, not addressed this phase.*
+
+Before Phase 4, `/majors/message` went straight to `majors_intake` with no
+classification step. Now every turn -- including a bare "my GPA is 3.6"
+reply mid-conversation -- goes through the router first, since there's no
+cheaper way yet to tell "this is obviously a continuation" from "this
+changed subject" without re-reading the conversation. Simpler and matches
+the documented single-entry-point architecture; a possible future cost
+optimization (e.g. skip the router once a thread is clearly mid-Majors-flow
+and the new message contains no clear subject change), not addressed now.
+Same "prove it first, tune later" pattern already used for the `k=6`
+retrieval count (17.9).

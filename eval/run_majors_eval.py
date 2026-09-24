@@ -1,8 +1,13 @@
-"""Drive eval/majors_scenarios.py against the real Majors graph directly
+"""Drive eval/majors_scenarios.py against the real unified graph directly
 (bypassing the HTTP API -- cheaper, and this project hasn't settled an
 automated pass/fail criterion yet, PLAN.md 17.7, so this prints actual
 results for manual review, exactly like eval/run_eval.py does for the
 Tier-1 domains).
+
+As of Phase 4, these scenarios go through the same router-driven graph as
+every other question -- there's no more Majors-only entry point -- so this
+also doubles as a check that the router keeps sending a Majors-flavored
+conversation to majors_intake on every turn, not just the first.
 
 Usage: python -m eval.run_majors_eval
 """
@@ -18,7 +23,7 @@ load_dotenv(Path(__file__).parent.parent / "backend" / ".env")
 
 from langgraph.types import Command  # noqa: E402
 
-from app.graph.build_majors import build_majors_graph  # noqa: E402
+from app.graph.build_app import build_app_graph  # noqa: E402
 from eval.majors_scenarios import SCENARIOS  # noqa: E402
 
 
@@ -54,6 +59,6 @@ def run_scenario(graph, scenario: dict) -> None:
 
 
 if __name__ == "__main__":
-    graph = build_majors_graph()
+    graph = build_app_graph()
     for scenario in SCENARIOS:
         run_scenario(graph, scenario)
