@@ -1,7 +1,7 @@
 import hashlib
 import os
 import re
-from functools import lru_cache
+import threading
 from pathlib import Path
 
 import chromadb
@@ -10,31 +10,54 @@ from chromadb.utils import embedding_functions
 # backend/app/retrieval/chroma_client.py -> backend/
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
+# Phase 4's router can fan out to several domains at once (langgraph.types.Send
+# runs each branch on its own thread), so this module's one-time setup can no
+# longer assume single-threaded access. @lru_cache alone isn't enough here --
+# CPython's lru_cache releases its internal lock while calling the wrapped
+# function on a cache miss, so two threads can both slip past the "not
+# cached yet" check and construct a second chromadb.PersistentClient for the
+# same path at once, which crashes inside chromadb's own client registry.
+# This lock serializes just the one-time construction; queries against an
+# already-open collection are unaffected and still run concurrently.
+_setup_lock = threading.RLock()  # reentrant: get_collection holds this while calling get_chroma_client/get_embedding_function, which acquire it again
+_chroma_client: chromadb.ClientAPI | None = None
+_embedding_function = None
 
-@lru_cache
+
 def get_chroma_client() -> chromadb.ClientAPI:
-    persist_dir = Path(os.environ.get("CHROMA_PERSIST_DIR", "./data/chroma"))
-    if not persist_dir.is_absolute():
-        # Anchor to backend/, not the process's cwd, so ingestion and
-        # querying always land on the same store regardless of which
-        # directory a command was run from.
-        persist_dir = BACKEND_DIR / persist_dir
-    return chromadb.PersistentClient(path=str(persist_dir))
+    global _chroma_client
+    if _chroma_client is None:
+        with _setup_lock:
+            if _chroma_client is None:
+                persist_dir = Path(os.environ.get("CHROMA_PERSIST_DIR", "./data/chroma"))
+                if not persist_dir.is_absolute():
+                    # Anchor to backend/, not the process's cwd, so ingestion
+                    # and querying always land on the same store regardless
+                    # of which directory a command was run from.
+                    persist_dir = BACKEND_DIR / persist_dir
+                _chroma_client = chromadb.PersistentClient(path=str(persist_dir))
+    return _chroma_client
 
 
-@lru_cache
 def get_embedding_function():
-    # Local sentence-transformers model -- free, offline, no per-token cost.
-    return embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name="all-MiniLM-L6-v2"
-    )
+    global _embedding_function
+    if _embedding_function is None:
+        with _setup_lock:
+            if _embedding_function is None:
+                # Local sentence-transformers model -- free, offline, no
+                # per-token cost.
+                _embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+                    model_name="all-MiniLM-L6-v2"
+                )
+    return _embedding_function
 
 
 def get_collection(domain: str):
     client = get_chroma_client()
-    return client.get_or_create_collection(
-        name=domain, embedding_function=get_embedding_function()
-    )
+    with _setup_lock:
+        return client.get_or_create_collection(
+            name=domain, embedding_function=get_embedding_function()
+        )
 
 
 def chunk_id(source_url: str, chunk_text: str) -> str:

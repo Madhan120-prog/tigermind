@@ -3,7 +3,7 @@ import os
 import anthropic
 
 from app.config.loader import get_domain
-from app.graph.state import GraphState
+from app.graph.app_state import AppState
 from app.retrieval.chroma_client import query_domain
 
 _client = None
@@ -53,7 +53,7 @@ def _deferral_constraint(deferrals: list[dict]) -> str:
     )
 
 
-def generic_domain_agent(state: GraphState) -> dict:
+def generic_domain_agent(state: AppState) -> dict:
     """One function for every Tier-1 domain -- behavior comes entirely from
     the domain's config entry, never a per-domain code branch."""
     config = get_domain(state["domain"])

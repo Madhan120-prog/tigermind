@@ -21,11 +21,15 @@ class AppState(TypedDict):
 
     # Router output.
     route: str | None
-    domain: str | None
+    active_domains: list[str]
 
-    # Tier-1 (single domain for now; generic_domain_agent and guardrails
-    # are unchanged from Phase 1-2, so this matches GraphState exactly).
+    # Tier-1 fan-out: one Send-based branch per active domain, each
+    # carrying its own "domain" (this branch's single domain, read by
+    # generic_domain_agent exactly like GraphState's old "domain" field)
+    # and "retrieved", joining into domain_results before any merge.
+    domain: str | None
     retrieved: list[dict]
+    domain_results: Annotated[list[dict], operator.add]
 
     # Majors (Tier 2), unchanged from MajorsState.
     target_major: str | None

@@ -42,22 +42,27 @@ CLASSIFY_TOOL = {
                 "type": "string",
                 "enum": ["tier1", "majors", "unclear"],
                 "description": (
-                    "'tier1' for a factual question a single listed domain "
-                    "covers. 'majors' for personalized major eligibility/"
-                    "advising using the student's own numbers, or general "
-                    "'help me pick a major' guidance. 'unclear' if the "
-                    "question doesn't fit any listed domain or Majors."
+                    "'tier1' for a factual question one or more listed "
+                    "domains cover. 'majors' for personalized major "
+                    "eligibility/advising using the student's own numbers, "
+                    "or general 'help me pick a major' guidance. 'unclear' "
+                    "if the question doesn't fit any listed domain or "
+                    "Majors."
                 ),
             },
-            "domain": {
-                "type": ["string", "null"],
+            "domains": {
+                "type": "array",
+                "items": {"type": "string"},
                 "description": (
-                    "Only when route is 'tier1': the single domain key this "
-                    "question needs. Null otherwise."
+                    "Only when route is 'tier1': every domain key this "
+                    "question genuinely needs. Usually exactly one -- more "
+                    "than one only when the question truly spans multiple "
+                    "topics (e.g. asking about both housing cost and an "
+                    "on-campus job in the same message). Empty otherwise."
                 ),
             },
         },
-        "required": ["route", "domain"],
+        "required": ["route", "domains"],
     },
 }
 
@@ -123,9 +128,9 @@ def router(state: AppState) -> dict:
     )
 
     route = classification["route"]
-    domain = classification["domain"]
+    domains = classification["domains"]
 
-    result = {"route": route, "domain": domain}
+    result = {"route": route, "active_domains": domains}
     if route == "unclear":
         # Bypasses guardrails entirely (like majors_intake's "not ready"
         # path already does) -- guardrails.py looks up a domain config,
