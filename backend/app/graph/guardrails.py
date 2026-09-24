@@ -1,5 +1,6 @@
 import re
 
+from app.agents.generic_domain_agent import generic_domain_agent, retry_constraint_for
 from app.config.loader import get_domain
 from app.graph.app_state import AppState
 
@@ -80,30 +81,57 @@ def _triggered_deferral(question: str, deferrals: list[dict]) -> dict | None:
     return None
 
 
-def check_domain(domain_name: str, question: str, hits: list[dict], answer: str, sources: list[str]) -> dict:
-    """The actual per-domain guardrail: deferral trigger match, then the
+def _deferral_response(domain_name: str, deferral: dict, sources: list[str]) -> dict:
+    return {
+        "domain": domain_name,
+        "deferred": True,
+        "confidence_ok": True,
+        "answer": DEFERRAL_TEMPLATE.format(
+            because=" ".join(deferral["because"].split()),
+            refer_to=" ".join(deferral["refer_to"].split()),
+        ),
+        "sources": sources,
+    }
+
+
+def check_domain(
+    domain_name: str,
+    question: str,
+    hits: list[dict],
+    answer: str,
+    sources: list[str],
+    regenerate=None,
+) -> dict:
+    """The actual per-domain guardrail: deferral checks, then the
     confidence gate. Runs once per active domain, before any multi-domain
     synthesis -- a low-confidence or deferred sub-answer must be settled
     here, not handed to a synthesizer that could smooth it into fluent,
     confident-sounding prose and launder exactly the kind of fabricated
     figure this check exists to catch.
+
+    Two different deferral checks, deliberately not treated the same way
+    (PLAN.md 17.13): if the STUDENT's question triggers a deferral topic,
+    deferring immediately is correct -- there's nothing to retry. If the
+    ANSWER volunteers a figure on a topic the question never raised, that's
+    the model breaking its own instruction not to, and discarding a
+    possibly-correct, unrelated answer outright is the wrong fix for a
+    prompting failure. `regenerate(deferral) -> str`, when given, gets one
+    chance to produce a clean answer with the violation restated before
+    this actually defers -- guardrails becomes a net with one retry in it,
+    not a hard stop on the model's first mistake.
     """
     config = get_domain(domain_name)
 
-    deferral = _triggered_deferral(question, config.deferrals) or (
-        _asserts_figure_on_deferred_topic(answer, config.deferrals)
-    )
-    if deferral is not None:
-        return {
-            "domain": domain_name,
-            "deferred": True,
-            "confidence_ok": True,
-            "answer": DEFERRAL_TEMPLATE.format(
-                because=" ".join(deferral["because"].split()),
-                refer_to=" ".join(deferral["refer_to"].split()),
-            ),
-            "sources": sources,
-        }
+    triggered = _triggered_deferral(question, config.deferrals)
+    if triggered is not None:
+        return _deferral_response(domain_name, triggered, sources)
+
+    volunteered = _asserts_figure_on_deferred_topic(answer, config.deferrals)
+    if volunteered is not None and regenerate is not None:
+        answer = regenerate(volunteered)
+        volunteered = _asserts_figure_on_deferred_topic(answer, config.deferrals)
+    if volunteered is not None:
+        return _deferral_response(domain_name, volunteered, sources)
 
     best_distance = min((h["distance"] for h in hits), default=float("inf"))
     confidence_ok = best_distance <= CONFIDENCE_DISTANCE_THRESHOLD and bool(sources)
@@ -129,8 +157,12 @@ def check_domain(domain_name: str, question: str, hits: list[dict], answer: str,
 def domain_guardrail_check(state: AppState) -> dict:
     """Fan-out branch node: runs check_domain for this one Send'd domain
     and joins its result into the shared domain_results list."""
+    def regenerate(deferral: dict) -> str:
+        return generic_domain_agent(state, extra_constraint=retry_constraint_for(deferral))["answer"]
+
     checked = check_domain(
-        state["domain"], state["question"], state["retrieved"], state["answer"], state["sources"]
+        state["domain"], state["question"], state["retrieved"], state["answer"], state["sources"],
+        regenerate=regenerate,
     )
     return {"domain_results": [checked]}
 

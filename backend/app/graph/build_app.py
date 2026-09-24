@@ -2,7 +2,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.types import Send
 
-from app.agents.generic_domain_agent import generic_domain_agent
+from app.agents.generic_domain_agent import generic_domain_agent, retry_constraint_for
 from app.agents.majors_intake import majors_intake
 from app.agents.majors_recommend import majors_recommend
 from app.agents.router import router
@@ -24,12 +24,17 @@ def _tier1_domain_pipeline(state: AppState) -> dict:
     write merges instead of colliding.
     """
     domain_output = generic_domain_agent(state)
+
+    def regenerate(deferral: dict) -> str:
+        return generic_domain_agent(state, extra_constraint=retry_constraint_for(deferral))["answer"]
+
     checked = check_domain(
         state["domain"],
         state["question"],
         domain_output["retrieved"],
         domain_output["answer"],
         domain_output["sources"],
+        regenerate=regenerate,
     )
     return {"domain_results": [checked]}
 

@@ -15,14 +15,27 @@ Section 2 for why each item is load-bearing rather than decorative.
       confirmed the same `thread_id` came back with no memory of the
       paused conversation, proving persistence is real (and bounded to
       the process lifetime — a documented tradeoff, not a hidden one).
-- [ ] **Conditional edges genuinely change graph shape** — the router's
+      `build_majors_graph()` itself was superseded in Phase 4 by the one
+      router-driven `build_app_graph()`, same `MemorySaver` singleton
+      pattern, same guarantee — re-verified live against the new graph.
+- [x] **Conditional edges genuinely change graph shape** — the router's
       output must determine which nodes actually execute (single-domain
       vs. multi-domain synthesizer path vs. Tier-3 auth-gated path), not
-      just get logged and ignored while every node runs anyway. Still
-      Phase 4 work. Majors' own `intake -> recommend` edge (Phase 3) is a
-      smaller, verified instance of the same mechanism: a call with no
-      GPA yet stays on `intake`, a call with GPA supplied moves to
-      `recommend` — real branching, not the router itself.
+      just get logged and ignored while every node runs anyway. Done in
+      Phase 4: a real tool-calling router (`route`: `tier1`/`majors`/
+      `unclear`, plus which domain(s) when `tier1`) determines the actual
+      graph path taken — `unclear` never touches retrieval or guardrails
+      at all, `majors` enters the Phase 3 state machine, and `tier1` fans
+      out via `langgraph.types.Send` to one `generic_domain_agent` call
+      per active domain, only running the synthesizer when more than one
+      domain actually fired. Verified live: a single-domain question
+      takes the direct path, a genuinely multi-topic question visibly
+      produces more than one `domain_results` entry and reaches the
+      synthesizer, and an out-of-scope question never reaches retrieval.
+      The Tier-3 auth-gated path isn't part of this yet — it doesn't exist
+      until Phase 6. Majors' own `intake -> recommend` edge (Phase 3)
+      remains a smaller, separately-verified instance of the same
+      mechanism.
 - [x] **`interrupt()` gates the Majors recommendation** — the
       declare-vs-apply output pauses for explicit confirmation before
       being treated as final, when GPA/prereq eligibility is borderline.

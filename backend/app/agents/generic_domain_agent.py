@@ -53,9 +53,32 @@ def _deferral_constraint(deferrals: list[dict]) -> str:
     )
 
 
-def generic_domain_agent(state: AppState) -> dict:
+RETRY_CONSTRAINT_TEMPLATE = """
+
+Your previous answer to this exact question mentioned {topics} alongside a
+number, which the instructions above already told you never to do. Answer
+ONLY what was actually asked, saying nothing at all about {topics} this
+time -- not even to explain that you can't help with it.
+"""
+
+
+def retry_constraint_for(deferral: dict) -> str:
+    """The net (guardrails.check_domain) caught the answer volunteering a
+    figure the question never asked about -- PLAN.md 17.13. Restates the
+    violated instruction concretely rather than repeating the same generic
+    constraint that was already broken once, for the one retry guardrails
+    allows before actually deferring."""
+    return RETRY_CONSTRAINT_TEMPLATE.format(topics=", ".join(deferral["triggers"]))
+
+
+def generic_domain_agent(state: AppState, extra_constraint: str = "") -> dict:
     """One function for every Tier-1 domain -- behavior comes entirely from
-    the domain's config entry, never a per-domain code branch."""
+    the domain's config entry, never a per-domain code branch.
+
+    extra_constraint is only ever non-empty on guardrails' one retry after
+    catching a deferral violation (see retry_constraint_for) -- normal
+    calls never pass it.
+    """
     config = get_domain(state["domain"])
     hits = query_domain(config.collection, state["question"], mode=config.retrieval_mode)
 
@@ -64,7 +87,7 @@ def generic_domain_agent(state: AppState) -> dict:
     )
     system = SYSTEM_TEMPLATE.format(
         prompt_snippet=config.prompt_snippet,
-        deferral_constraint=_deferral_constraint(config.deferrals),
+        deferral_constraint=_deferral_constraint(config.deferrals) + extra_constraint,
         context=context,
     )
 
