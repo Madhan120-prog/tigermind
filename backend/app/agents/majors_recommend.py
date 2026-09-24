@@ -51,6 +51,10 @@ def _declare_path(target_major: str) -> dict:
         "recommendation_confirmed": True,
         "answer": response.content[0].text,
         "sources": sources,
+        # So the shared guardrails node can run the same confidence gate a
+        # Tier-1 domain question gets -- this path retrieves too, and had
+        # no gate on it at all before.
+        "retrieved": hits,
     }
 
 

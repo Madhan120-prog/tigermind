@@ -93,9 +93,9 @@ def build_app_graph():
     launder exactly the kind of fabricated figure guardrails.md exists to
     catch.
 
-    majors_recommend still edges straight to END rather than through
-    guardrails; extending guardrails to cover Majors' answers too is a
-    later commit on this branch.
+    majors_recommend's final answer also flows through guardrails now
+    (majors_intake's "not ready yet" clarifying question still doesn't --
+    there's no retrieval or citation in a bare question to check).
 
     checkpointer=MemorySaver() must stay a module-level singleton wherever
     this is used (same caveat as the old build_majors_graph()) -- lost on
@@ -115,7 +115,7 @@ def build_app_graph():
     graph.add_conditional_edges(
         "majors_intake", _route_after_intake, {"majors_recommend": "majors_recommend", END: END}
     )
-    graph.add_edge("majors_recommend", END)
+    graph.add_edge("majors_recommend", "guardrails")
     graph.add_edge("tier1_domain", "join_domain_results")
     graph.add_conditional_edges(
         "join_domain_results",

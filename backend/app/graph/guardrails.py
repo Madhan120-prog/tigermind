@@ -135,15 +135,58 @@ def domain_guardrail_check(state: AppState) -> dict:
     return {"domain_results": [checked]}
 
 
+def _majors_guardrails(state: AppState) -> dict:
+    """Majors' final answers never went through any shared guardrail check
+    before this -- architecture.md says guardrails run "on every path,
+    including Tier-3" (by extension Tier 2), and this closes that gap.
+
+    The declined-borderline acknowledgment is a special case: majors_recommend
+    deliberately shows it no eligibility facts at all ("nothing to soften if
+    the model never sees them"), so there's nothing here for a confidence or
+    citation check to mean anything about.
+    """
+    if state.get("recommendation_confirmed") is False:
+        return {"answer": state["answer"], "sources": [], "confidence_ok": True, "deferred": False}
+
+    answer = state["answer"]
+    sources = state.get("sources", [])
+    recommendation = state.get("recommendation") or {}
+
+    if recommendation.get("path") == "declare":
+        # This path retrieves from the programs collection just like a
+        # Tier-1 domain question would -- same confidence gate.
+        checked = check_domain("programs", state["question"], state.get("retrieved", []), answer, sources)
+        answer, sources = checked["answer"], checked["sources"]
+        confidence_ok, deferred = checked["confidence_ok"], checked["deferred"]
+    else:
+        # The competitive-eligibility path is pure config lookup, no
+        # retrieval -- no confidence gate to apply, but it must still cite
+        # something (it always embeds major.source_url when it gets here).
+        confidence_ok, deferred = bool(sources), False
+
+    if confidence_ok and DOLLAR_OR_DATE_PATTERN.search(answer):
+        # Nursing's GPA cutoffs are just as liable to change semester to
+        # semester as a dollar figure or a date -- and every finalized
+        # answer here states real deadlines (month names), which this
+        # pattern already catches.
+        answer = answer + FRESHNESS_DISCLAIMER
+
+    return {"answer": answer, "sources": sources, "confidence_ok": confidence_ok, "deferred": deferred}
+
+
 def guardrails(state: AppState) -> dict:
-    """Final node, reached whether one domain answered directly or several
-    were merged by the synthesizer. Per-domain deferral/confidence checks
+    """Final node, reached whether one Tier-1 domain answered directly,
+    several were merged by the synthesizer, or Majors produced a final
+    recommendation. Per-domain deferral/confidence checks for Tier-1
     already happened in domain_guardrail_check -- this node only
     aggregates across however many domains were involved, decides on and
     appends a single freshness disclaimer (never one per domain, so a
     synthesized answer doesn't repeat the same note two or three times),
     and does a final citation sanity check.
     """
+    if state.get("route") == "majors":
+        return _majors_guardrails(state)
+
     results = state["domain_results"]
 
     if len(results) == 1:
