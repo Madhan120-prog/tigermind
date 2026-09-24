@@ -5,7 +5,7 @@ import anthropic
 from langgraph.types import interrupt
 
 from app.config.competitive_majors import CompetitiveMajor, match_competitive_major
-from app.graph.majors_state import MajorsState
+from app.graph.app_state import AppState
 from app.retrieval.chroma_client import query_domain
 
 _client = None
@@ -50,6 +50,7 @@ def _declare_path(target_major: str) -> dict:
         },
         "recommendation_confirmed": True,
         "answer": response.content[0].text,
+        "sources": sources,
     }
 
 
@@ -189,7 +190,7 @@ def _competitive_path(
     # LangGraph re-runs this entire function from the top on resume, so an
     # LLM call or any other side effect placed before interrupt() would
     # run twice and could produce a different draft than what the student
-    # already saw and responded to. See build_majors.py's docstring.
+    # already saw and responded to. See build_app.py's docstring.
     band = _eligibility_band(major, gpa, prereq_gpa, completed_courses)
     prereqs = _classify_prereqs(major, completed_courses)
     recommendation = {
@@ -296,10 +297,11 @@ Eligibility read: {band}
         "recommendation": recommendation,
         "recommendation_confirmed": recommendation_confirmed,
         "answer": response.content[0].text,
+        "sources": recommendation["sources"],
     }
 
 
-def majors_recommend(state: MajorsState) -> dict:
+def majors_recommend(state: AppState) -> dict:
     target_major = state["target_major"]
     competitive = match_competitive_major(target_major)
 
