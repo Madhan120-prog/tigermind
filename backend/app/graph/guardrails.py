@@ -155,7 +155,7 @@ def check_domain(
 
 
 def domain_guardrail_check(state: AppState) -> dict:
-    """Fan-out branch node: runs check_domain for this one Send'd domain
+    """Fan-out branch node: runs check_domain for this one Send-targeted domain
     and joins its result into the shared domain_results list."""
     def regenerate(deferral: dict) -> str:
         return generic_domain_agent(state, extra_constraint=retry_constraint_for(deferral))["answer"]
@@ -206,6 +206,20 @@ def _majors_guardrails(state: AppState) -> dict:
     return {"answer": answer, "sources": sources, "confidence_ok": confidence_ok, "deferred": deferred}
 
 
+def _synthesis_volunteers_deferred_figure(answer: str, results: list[dict]) -> bool:
+    """Checks the SYNTHESIZED text itself against every involved domain's
+    configured deferrals -- not just the domain(s) that already deferred,
+    since a merge could in principle invent a new violation on a topic
+    neither original per-domain answer stated at all. This is what makes
+    the post-synthesis check independent of what the pre-synthesis checks
+    already found, rather than just re-trusting them."""
+    domains_involved = {r["domain"] for r in results}
+    return any(
+        _asserts_figure_on_deferred_topic(answer, get_domain(d).deferrals) is not None
+        for d in domains_involved
+    )
+
+
 def guardrails(state: AppState) -> dict:
     """Final node, reached whether one Tier-1 domain answered directly,
     several were merged by the synthesizer, or Majors produced a final
@@ -225,6 +239,17 @@ def guardrails(state: AppState) -> dict:
         answer, sources = results[0]["answer"], results[0]["sources"]
     else:
         answer, sources = state["answer"], state["sources"]
+        if _synthesis_volunteers_deferred_figure(answer, results):
+            # The synthesizer is an LLM call too, and confidence_ok/deferred
+            # below are computed from the PRE-synthesis per-domain checks,
+            # not from the merged text -- so a rewritten deferral or an
+            # invented figure on a deferred topic would otherwise slip
+            # through as confidence_ok=True. Rather than trust text this
+            # check can't vouch for, fall back to each domain's own
+            # already-individually-checked answer, stacked deterministically
+            # instead of merged by the model.
+            answer = "\n\n".join(f"**{r['domain']}:**\n{r['answer']}" for r in results)
+            sources = sorted({s for r in results for s in r["sources"]})
 
     confidence_ok = all(r["confidence_ok"] for r in results)
     deferred = any(r["deferred"] for r in results)

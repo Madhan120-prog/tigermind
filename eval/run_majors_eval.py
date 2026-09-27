@@ -36,7 +36,8 @@ def run_scenario(graph, scenario: dict) -> None:
     for turn in scenario["turns"]:
         if turn["kind"] == "message":
             result = graph.invoke(
-                {"messages": [{"role": "user", "content": turn["content"]}]}, config
+                {"messages": [{"role": "user", "content": turn["content"]}], "question": turn["content"]},
+                config,
             )
         else:
             result = graph.invoke(Command(resume=turn["content"]), config)

@@ -128,9 +128,28 @@ def router(state: AppState) -> dict:
     )
 
     route = classification["route"]
-    domains = classification["domains"]
 
-    result = {"route": route, "active_domains": domains}
+    # The tool call is forced, not verified -- a hallucinated or malformed
+    # domain name would otherwise reach get_domain() as a raw KeyError, and
+    # an empty list for "tier1" would fan out to zero Send branches and
+    # produce no answer at all. Filtered and deduplicated against the real
+    # config, never trusted as-is.
+    valid_domains = load_domains().keys()
+    domains = list(dict.fromkeys(d for d in classification["domains"] if d in valid_domains))
+    if route == "tier1" and not domains:
+        route = "unclear"
+
+    result = {
+        "route": route,
+        "active_domains": domains,
+        # domain_results is scratch state for exactly one turn's Tier-1
+        # fan-out (see app_state._reset_or_extend) -- without this, a
+        # previous turn's results on the same thread_id persist through
+        # the checkpointer and get merged with this turn's via
+        # domain_results' reducer, corrupting the single-vs-multi-domain
+        # decision two turns later with stale data.
+        "domain_results": None,
+    }
     if route == "unclear":
         # Bypasses guardrails entirely (like majors_intake's "not ready"
         # path already does) -- guardrails.py looks up a domain config,

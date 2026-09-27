@@ -12,7 +12,7 @@ from app.graph.guardrails import check_domain, guardrails
 
 
 def _tier1_domain_pipeline(state: AppState) -> dict:
-    """Send's target for the Tier-1 fan-out. generic_domain_agent and the
+    """Send-based target for the Tier-1 fan-out. generic_domain_agent and the
     per-domain guardrail check have to run here as one atomic write, not
     as two separate graph nodes joined by a normal edge -- Send only
     supplies its payload as input to this one invocation, it doesn't

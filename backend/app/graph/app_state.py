@@ -2,6 +2,19 @@ import operator
 from typing import TypedDict, Annotated
 
 
+def _reset_or_extend(existing: list[dict], update: list[dict] | None) -> list[dict]:
+    """domain_results' reducer. Plain operator.add would carry a previous
+    turn's results forward across the checkpointer -- domain_results is
+    scratch state for exactly one turn's Tier-1 fan-out, not something
+    meant to persist across separate /ask calls on the same thread_id.
+    router emits None at the start of every turn to clear it via this
+    reducer; the fan-out branches emit an actual list to accumulate within
+    that one turn, same as operator.add would."""
+    if update is None:
+        return []
+    return existing + update
+
+
 class AppState(TypedDict):
     """One state schema behind the single /ask entry point, merging what
     used to be GraphState (Tier-1) and MajorsState (Tier-2) -- the router
@@ -29,7 +42,7 @@ class AppState(TypedDict):
     # and "retrieved", joining into domain_results before any merge.
     domain: str | None
     retrieved: list[dict]
-    domain_results: Annotated[list[dict], operator.add]
+    domain_results: Annotated[list[dict], _reset_or_extend]
 
     # Majors (Tier 2), unchanged from MajorsState.
     target_major: str | None
