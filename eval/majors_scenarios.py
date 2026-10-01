@@ -18,6 +18,10 @@ SCENARIOS = [
             {"kind": "message", "content": "I'm not sure what to study yet, but I like biology and helping people"},
             {"kind": "message", "content": "What about Computer Science instead?"},
         ],
+        # min_interests rather than exact content -- wording varies run to
+        # run, but a checkpointer failure would reset the list to turn 2's
+        # single item (length 1), which this still catches.
+        "expected": {"ready_to_recommend": False, "target_major": None, "min_interests": 2},
     },
     {
         "name": "B - conditional edge (ask more vs. proceed)",
@@ -39,6 +43,7 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"ready_to_recommend": True, "interrupted": False, "band": "clearly_eligible"},
     },
     {
         "name": "C - interrupt() fires and resumes (borderline)",
@@ -60,6 +65,7 @@ SCENARIOS = [
             },
             {"kind": "resume", "content": "yes, finalize it"},
         ],
+        "expected": {"interrupted": False, "band": "borderline", "recommendation_confirmed": True},
     },
     {
         "name": "C2 - interrupt() fires and declines (borderline)",
@@ -80,6 +86,7 @@ SCENARIOS = [
             },
             {"kind": "resume", "content": "no, let me improve my numbers first"},
         ],
+        "expected": {"interrupted": False, "band": "borderline", "recommendation_confirmed": False},
     },
     {
         "name": "D - interrupt() does not fire (clearly eligible)",
@@ -99,6 +106,7 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"interrupted": False, "band": "clearly_eligible"},
     },
     {
         "name": "E - interrupt() does not fire (clearly ineligible)",
@@ -115,6 +123,7 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"interrupted": False, "band": "clearly_ineligible"},
     },
     {
         "name": "F - high GPA but unrelated/failing courses (regression check)",
@@ -137,6 +146,7 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"interrupted": True},
     },
     {
         "name": "G - in-progress prerequisite (schema fix check)",
@@ -162,6 +172,7 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"interrupted": False, "band": "clearly_eligible"},
     },
     {
         "name": "H - strong cumulative GPA masking a weak prerequisite GPA (regression check)",
@@ -186,5 +197,6 @@ SCENARIOS = [
                 ),
             },
         ],
+        "expected": {"interrupted": False, "band": "clearly_ineligible"},
     },
 ]

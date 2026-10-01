@@ -1,15 +1,15 @@
 """Drive eval/majors_scenarios.py against the real unified graph directly
-(bypassing the HTTP API -- cheaper, and this project hasn't settled an
-automated pass/fail criterion yet, PLAN.md 17.7, so this prints actual
-results for manual review, exactly like eval/run_eval.py does for the
-Tier-1 domains).
+(bypassing the HTTP API -- cheaper).
 
 As of Phase 4, these scenarios go through the same router-driven graph as
 every other question -- there's no more Majors-only entry point -- so this
 also doubles as a check that the router keeps sending a Majors-flavored
 conversation to majors_intake on every turn, not just the first.
 
-Usage: python -m eval.run_majors_eval
+Usage:
+  python -m eval.run_majors_eval           # manual review (unchanged)
+  python -m eval.run_majors_eval --gate    # asserts each scenario's
+                                            # "expected" dict, exits 1 on failure
 """
 import sys
 from pathlib import Path
@@ -27,7 +27,30 @@ from app.graph.build_app import build_app_graph  # noqa: E402
 from eval.majors_scenarios import SCENARIOS  # noqa: E402
 
 
-def run_scenario(graph, scenario: dict) -> None:
+def _check_expected(result: dict, expected: dict) -> list[str]:
+    """Each scenario's expected outcome is a structural state assertion
+    (route, band, interrupted, confirmed) already described in its prose
+    "checks" field -- not prose to compare, so a plain equality check is
+    both correct and free, no LLM judge needed."""
+    failures = []
+    for key, want in expected.items():
+        if key == "min_interests":
+            got = len(result.get("interests") or [])
+            if got < want:
+                failures.append(f"interests: expected at least {want}, got {got}")
+            continue
+        if key == "interrupted":
+            got = "__interrupt__" in result
+        elif key == "band":
+            got = (result.get("recommendation") or {}).get("eligibility_band")
+        else:
+            got = result.get(key)
+        if got != want:
+            failures.append(f"{key}: expected {want!r}, got {got!r}")
+    return failures
+
+
+def run_scenario(graph, scenario: dict, gate: bool = False) -> bool:
     print(f"\n=== {scenario['name']} ===")
     print(f"Checking: {scenario['checks']}")
     config = {"configurable": {"thread_id": uuid4().hex}}
@@ -58,8 +81,24 @@ def run_scenario(graph, scenario: dict) -> None:
 
     print(f"\n  final recommendation_confirmed={result.get('recommendation_confirmed')}")
 
+    if not gate:
+        return True
+
+    failures = _check_expected(result, scenario.get("expected", {}))
+    if failures:
+        print(f"  FAIL: {'; '.join(failures)}")
+        return False
+    print("  PASS")
+    return True
+
 
 if __name__ == "__main__":
+    gate = "--gate" in sys.argv[1:]
     graph = build_app_graph()
+    all_passed = True
     for scenario in SCENARIOS:
-        run_scenario(graph, scenario)
+        if not run_scenario(graph, scenario, gate=gate):
+            all_passed = False
+
+    if gate and not all_passed:
+        sys.exit(1)
