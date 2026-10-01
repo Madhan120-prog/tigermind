@@ -228,10 +228,12 @@ available for a personal project. Phase 6 is explicitly a **mocked SIS**:
   single source of truth for required config.
 - **Idempotent ingestion**: re-running a domain's ingestion script should
   be safe to run repeatedly (upsert by content hash, not append).
-- **CI gate**: GitHub Actions runs `eval/run_eval.py` against the relevant
-  eval subset on every PR and blocks merge on failure — the eval subset
-  passing is the Definition of Done for a phase, enforced automatically
-  rather than relying on remembering to run it locally.
+- **CI gate**: built in Phase 5 (`.github/workflows/eval.yml`). GitHub
+  Actions re-ingests all 5 live domains fresh, then runs all three
+  `--gate` eval runners on every PR into `main` and blocks merge on
+  failure — the eval subset passing is the Definition of Done for a phase,
+  enforced automatically rather than relying on remembering to run it
+  locally.
 
 ---
 
@@ -386,10 +388,16 @@ Tier-1 only with Majors left separate — plus the 17.13 constrained-retry
 fix, already committed to for this phase, landed here too.
 
 ### Phase 5 — Eval, CI, Documentation (2-3 days)
-Full eval pass across all built domains. Wire `eval/run_eval.py` into
-GitHub Actions per Section 9. **This is the portfolio-ready checkpoint** —
-everything up to here is demo-able and resume-worthy even if Phase 6 never
-happens.
+Resolved 17.7/17.11 with an LLM-as-judge verdict plus a one-retry
+tolerance for sampling variance (`eval/judge.py`, `--gate` mode on all
+three runners); the Majors/router scenarios use plain structural
+assertions instead of a judge, since those are state facts, not prose.
+Wired into GitHub Actions (`.github/workflows/eval.yml`) per Section 9,
+gated on fresh real ingestion of all 5 live domains on every PR rather
+than a committed fixture. 17.8 (frontend, `docker-compose.yml`) resolved
+as an explicit deferral, not built — this phase's actual job was the
+eval/CI gate. **This is the portfolio-ready checkpoint** — everything up
+to here is demo-able and resume-worthy even if Phase 6 never happens.
 
 ### Phase 6 — SSO / SIS Actions (last phase, 4-5 days)
 Mock SIS service, mock login/JWT, "my classes" lookup, `interrupt()`-gated
@@ -530,21 +538,47 @@ speculatively, per the project's minimize-dependencies rule.
 
 ### Blocking Phase 5
 
-**17.7 — "The eval passes" is undefined.**
-`CLAUDE.md` requires running the eval subset before advancing a phase, and
-Section 9 requires CI to block merges on eval failure — but
-`eval/run_eval.py` only prints question/expected/actual for manual review.
-There is no pass criterion.
-*Decide:* exact/substring match on the expected answer, correct
-`source_url` present in the cited sources, an LLM-as-judge call, or a
-combination. Section 9's CI gate cannot be built until this is settled.
+**17.7 — RESOLVED in Phase 5.** "The eval passes" was undefined:
+`eval/run_eval.py` only printed question/expected/actual for manual
+review, with no pass criterion, so Section 9's CI gate could never be
+built. Resolved with an LLM-as-judge verdict (`eval/judge.py`, a forced
+tool-call comparing meaning, not wording, against the expected answer) —
+exact/substring matching was ruled out because the eval set's expected
+answers are prose, not fixed strings, and 17.11 already found wording
+varies run to run. `--gate` mode added to all three runners
+(`run_eval.py`, `run_majors_eval.py`, `run_router_eval.py`); the Majors
+and router scenarios use plain structural assertions instead of a judge
+(route, band, interrupted, confidence/deferred are state facts, not prose
+to grade). Default no-flag output is unchanged in all three.
+
+Caught two real bugs immediately, both in `programs`, both pre-existing
+(not introduced by this phase) and both only surfacing now because the
+judge is stricter than a human eyeballing output used to be:
+
+- The agent was naming two FCBE minors as majors, traced to the shared
+  table-to-text logic correctly dropping an empty "Major" cell as noise —
+  ambiguous specifically for this one table, where an empty cell is
+  itself meaningful. Fixed at the prompt level (same pattern as Nursing's
+  facts), verified 3/3 consistent passes.
+- Asked whether a major with no documented admission criteria (e.g.
+  Computer Science) is competitive, the agent hedged into "I don't have
+  information" instead of correctly inferring that the absence of
+  criteria (when Nursing's real criteria *are* present in the same
+  domain) is itself the answer: no special requirement. Fixed with an
+  explicit instruction for this exact question shape, verified 4/4
+  consistent passes where it had failed roughly 1 in 3 before.
+
+See 17.11 for how the retry mechanism resolves that item too.
 
 ### Unscheduled deliverables
 
-**17.8 — The frontend and `docker-compose.yml` are promised but unphased.**
-Both appear in the README and in Sections 9 and 11, but no phase in
-Section 13 builds either one. Assign them to a phase or drop them from the
-stated deliverables.
+**17.8 — RESOLVED in Phase 5: dropped from stated scope, not built.**
+The frontend and `docker-compose.yml` appeared in the README and Sections
+9 and 11, but no phase in Section 13 ever built either one. Phase 5's
+actual job was the eval/CI gate, not UI/packaging polish — both are now
+explicit deferrals (same pattern as other competitive majors or the
+durable checkpointer backend), and the README no longer presents them as
+already-planned deliverables.
 
 ### Found during Phase 1
 
@@ -567,13 +601,21 @@ ingestion. Guarding ingestion correctness needs a different mechanism —
 parser tests against known table shapes, or an ingestion-time assertion
 that every extracted row kept its full column count.
 
-**17.11 — eval verdicts are not deterministic.**
-The same question against unchanged retrieval produced a hedged "I can't
-find this" on one run and a confident inference on the next. A CI gate
-(Section 9) that fails on sampling variance will be ignored within a week.
-Whatever pass criterion 17.7 settles on has to tolerate this — pinning
-`temperature=0`, scoring on retrieved `source_url` rather than answer
-prose, or requiring N consecutive failures before a red build.
+**17.11 — RESOLVED in Phase 5, alongside 17.7.** Eval verdicts are not
+deterministic — the same question against unchanged retrieval produced a
+hedged "I can't find this" on one run and a confident inference on the
+next, and a CI gate that fails on sampling variance would be ignored
+within a week. Resolved with a retry, not a blanket pass-rate threshold: a
+question that fails its judged verdict gets exactly one retry (fresh agent
+call, re-judged) before counting as a real failure — targets the specific
+documented failure mode without lowering the bar for a genuine regression
+the way "90% passing is fine" would on a small eval set.
+
+One known, accepted exception this doesn't fully smooth over: the
+student-employment domestic-hours question (17.13) can still fail after
+its retry, since that's the same model-level limitation 17.13 already
+accepted as "not a 100% fix." An occasional red build on specifically that
+question is expected, not a mystery regression.
 
 **17.12 — Course Catalog has no reachable public source.**
 Phase 0 recorded that `catalog.memphis.edu` returned empty content and
