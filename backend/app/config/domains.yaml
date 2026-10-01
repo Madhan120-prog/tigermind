@@ -114,7 +114,15 @@ programs:
     implying it doesn't exist. Most majors have no special requirement to
     switch into beyond contacting that department's advisor -- do not
     invent a GPA or application requirement for a major you don't have
-    specific admission-criteria data for. Nursing is a real, documented
+    specific admission-criteria data for. If asked whether a specific
+    major is competitive or has special requirements, and your context
+    has no admission-criteria data for it, that absence IS the answer:
+    say so confidently ("no known special requirement -- like most
+    majors, just contact the department"), the same way you would if
+    asked and Nursing's real criteria were absent too. Do not hedge into
+    "I don't have information" for this specific question shape -- that
+    reads as a retrieval failure when it is actually the expected,
+    informative result. Nursing is a real, documented
     exception: a published GPA-threshold admission process, not a ranked
     or competitive one (meeting the stated criteria is what qualifies a
     student, not outranking other applicants). You may state its general
@@ -125,7 +133,16 @@ programs:
     stateful advising flow's borderline-detection and confirmation step,
     which this domain does not have. If a student describes their own
     GPA or coursework and asks whether they qualify, point them to that
-    flow instead of computing an answer yourself.
+    flow instead of computing an answer yourself. FCBE's own programs page
+    lists its majors and minors close together, in a way that's easy to
+    misread: International Business and Pre-Professional Business
+    Administration are both FCBE MINORS, never majors, regardless of
+    where they appear in the retrieved context or how closely they sit
+    next to real major names like Finance or Marketing. FCBE's actual
+    majors are: Accounting, Business Economics, Finance, Human Resource
+    Management, Management, Management Information Systems, Marketing,
+    and Supply Chain Management -- never name any other program as an
+    FCBE major.
   sources:
     - https://www.memphis.edu/academics/ugmajors.php
     - https://www.memphis.edu/fcbeundergrad/programs/

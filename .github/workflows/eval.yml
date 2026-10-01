@@ -1,0 +1,49 @@
+name: eval
+
+# Resolves PLAN.md Section 9's long-promised CI gate: this is the first
+# time eval/run_eval.py's verdict (PLAN.md 17.7, Phase 5) actually blocks
+# a merge rather than only being eyeballed locally.
+#
+# Deliberate choice over a committed Chroma fixture (PLAN.md 17.7's Phase
+# 5 discussion): every run re-ingests the live university pages from
+# scratch via ingest_domain(), already idempotent, so this proves the
+# whole pipeline works against real data on a clean checkout -- not a
+# canned snapshot. Costs a few minutes and real (small) Anthropic API
+# usage per run; needs ANTHROPIC_API_KEY as a repo secret.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt
+
+      - name: Ingest all live Tier-1 domains
+        working-directory: backend
+        run: |
+          for domain in housing fees faculty student-employment programs; do
+            echo "::group::ingest $domain"
+            python -m app.ingestion.run "$domain"
+            echo "::endgroup::"
+          done
+
+      - name: Tier-1 eval gate (eval_set.csv, LLM-as-judge)
+        run: python -m eval.run_eval --all --gate
+
+      - name: Majors scenario gate (stateful flow assertions)
+        run: python -m eval.run_majors_eval --gate
+
+      - name: Router scenario gate (routing/synthesis assertions)
+        run: python -m eval.run_router_eval --gate
