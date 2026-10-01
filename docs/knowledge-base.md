@@ -34,11 +34,15 @@ source is unreachable in Phase 0 and expensive to discover it mid-build.
 - Faculty has no central directory — each department publishes its own
   page in its own way. This is why Faculty later needed sitemap-based
   auto-discovery instead of a hardcoded URL list.
-- Events and Course Catalog are both JS-rendered — a plain HTTP fetch
-  returns nothing useful. Course Catalog turned out to be worse: it's
-  behind an AWS WAF bot-challenge, not just JS-rendered (confirmed in
-  Phase 2, `PLAN.md` 17.12) — still unresolved, permanently dropped from
-  scope rather than fought.
+- Events and Course Catalog both returned empty content from a plain HTTP
+  fetch. Phase 0's working hypothesis for both was JS rendering. That
+  hypothesis turned out to be wrong for Course Catalog: a Phase 2 spike
+  found the real cause was an AWS WAF bot-challenge (an HTTP 202 with a
+  JavaScript challenge page served to every non-browser client, plus a
+  120-second crawl-delay in `robots.txt`) — not a rendering problem at
+  all, a deliberate access control (`PLAN.md` 17.12). Still unresolved,
+  permanently dropped from scope rather than fought (defeating it would
+  mean specifically engineering around a bot-detection wall).
 
 **What I learned:** A source that "has the data" isn't the same as a
 source you can actually fetch. Two domains (Events, Course Catalog) that
@@ -147,9 +151,14 @@ scaling).
   dropping single-digit keys — exactly what a credit-hour count is, and
   the only thing distinguishing one fee-schedule row from the next.
 - **A real safety finding, not a code bug:** the university's own pages
-  disagree on how many hours an F-1 student can work during school
-  breaks — one page says 40, another says 20. Getting this wrong risks a
-  real visa-status violation for a real student. Built a config-driven
+  disagree about F-1 students' break-time work hours in a way that's easy
+  to misread as agreement: one page explicitly states F-1 students may
+  work up to 40 hours/week *during breaks*, while a different page states
+  a 20-hour limit for *in-session* weeks and says nothing about breaks at
+  all — so there's no single authoritative break-time number, only one
+  real figure for a different situation and silence on the one that
+  matters. Getting this wrong risks a real visa-status violation for a
+  real student. Built a config-driven
   deferral system: a domain declares its own sensitive topics and where to
   redirect students, and a guardrail (not just a prompt instruction)
   refuses to state a figure on that topic even if the model tries to
@@ -207,12 +216,14 @@ LLM calls — because if it ran an LLM call, a resume could produce a
 silently defeating the entire point of asking for confirmation.
 
 **Bugs found & fixed:**
-- **Decline detection only matched the literal word "no."** A natural
-  reply like *"no, let me improve my numbers first"* still starts with
-  "no," so a naive exact-match would have worked — but the actual bug was
-  the reverse risk (matching too narrowly and missing real declines
-  worded differently), caught and fixed with a proper pattern match before
-  it shipped.
+- **Decline detection had to avoid being too strict, not too loose.** The
+  risk guarded against: checking whether the student's whole reply
+  *exactly equals* "no" would miss a natural reply like *"no, let me
+  improve my numbers first"* entirely, since it isn't exactly "no" — and
+  silently treat a genuine decline as confirmation, the one failure mode
+  that would make the entire confirmation step pointless. Shipped with a
+  word-boundary prefix match (`^\s*no\b`) specifically so a real decline
+  phrased naturally is still caught.
 - **The model hallucinated the Nursing college's actual name** ("Lonel C.
   Lowel School of Nursing," which doesn't exist) because the real name was
   never given to it as a fact — it was left to guess from context. Fixed
