@@ -1,17 +1,5 @@
-import os
-
-import anthropic
-
 from app.graph.app_state import AppState
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
+from app.llm_client import complete
 
 
 SYSTEM_TEMPLATE = """A University of Memphis student asked one question that
@@ -34,12 +22,12 @@ def synthesizer(state: AppState) -> dict:
     results = state["domain_results"]
     sections = "\n\n".join(f"[{r['domain']}]\n{r['answer']}" for r in results)
 
-    response = _get_client().messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=700,
+    response = complete(
         system=SYSTEM_TEMPLATE.format(sections=sections),
         messages=[{"role": "user", "content": state["question"]}],
+        model="claude-sonnet-4-5",
+        max_tokens=700,
     )
 
     sources = sorted({source for r in results for source in r["sources"]})
-    return {"answer": response.content[0].text, "sources": sources}
+    return {"answer": response.text, "sources": sources}

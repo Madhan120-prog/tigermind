@@ -1,19 +1,7 @@
-import os
-
-import anthropic
-
 from app.config.loader import get_domain
 from app.graph.app_state import AppState
+from app.llm_client import complete
 from app.retrieval.chroma_client import query_domain
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
 
 
 SYSTEM_TEMPLATE = """{prompt_snippet}
@@ -91,13 +79,13 @@ def generic_domain_agent(state: AppState, extra_constraint: str = "") -> dict:
         context=context,
     )
 
-    response = _get_client().messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=500,
+    response = complete(
         system=system,
         messages=[{"role": "user", "content": state["question"]}],
+        model="claude-sonnet-4-5",
+        max_tokens=500,
     )
-    answer = response.content[0].text
+    answer = response.text
 
     sources = sorted({h["metadata"]["source_url"] for h in hits})
     return {

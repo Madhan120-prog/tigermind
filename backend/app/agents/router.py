@@ -1,18 +1,6 @@
-import os
-
-import anthropic
-
 from app.config.loader import load_domains
 from app.graph.app_state import AppState
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
+from app.llm_client import complete
 
 
 MAJORS_DESCRIPTION = """Personalized major advising: a student expressing
@@ -115,17 +103,14 @@ def router(state: AppState) -> dict:
     ("my GPA is 3.6") still classifies as 'majors' rather than 'unclear',
     the same reason majors_intake re-derives from full history each turn.
     """
-    response = _get_client().messages.create(
+    response = complete(
+        system=_system_prompt(),
+        messages=state["messages"],
         model="claude-opus-5",
         max_tokens=300,
-        system=_system_prompt(),
-        tools=[CLASSIFY_TOOL],
-        tool_choice={"type": "tool", "name": "classify_question"},
-        messages=state["messages"],
+        tool=CLASSIFY_TOOL,
     )
-    classification = next(
-        block.input for block in response.content if block.type == "tool_use"
-    )
+    classification = response.tool_input
 
     route = classification["route"]
 

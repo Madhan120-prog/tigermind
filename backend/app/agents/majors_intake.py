@@ -1,18 +1,6 @@
-import os
-
-import anthropic
-
 from app.config.competitive_majors import match_competitive_major
 from app.graph.app_state import AppState
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
+from app.llm_client import complete
 
 
 EXTRACT_TOOL = {
@@ -112,17 +100,14 @@ def majors_intake(state: AppState) -> dict:
     turn, rather than incrementally merging one message at a time -- this
     avoids stale fields drifting out of sync with what the student has
     actually said, at the cost of one extra tokens-in-context turn."""
-    response = _get_client().messages.create(
+    response = complete(
+        system=SYSTEM,
+        messages=state["messages"],
         model="claude-sonnet-4-5",
         max_tokens=600,
-        system=SYSTEM,
-        tools=[EXTRACT_TOOL],
-        tool_choice={"type": "tool", "name": "update_intake"},
-        messages=state["messages"],
+        tool=EXTRACT_TOOL,
     )
-    extracted = next(
-        block.input for block in response.content if block.type == "tool_use"
-    )
+    extracted = response.tool_input
 
     target_major = extracted["target_major"]
     gpa = extracted["gpa"]

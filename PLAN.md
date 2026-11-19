@@ -742,3 +742,51 @@ optimization (e.g. skip the router once a thread is clearly mid-Majors-flow
 and the new message contains no clear subject change), not addressed now.
 Same "prove it first, tune later" pattern already used for the `k=6`
 retrieval count (17.9).
+
+**17.17 — New. A temporary, dev-only local-LLM fallback exists for when
+Anthropic credits aren't available.** *Never the production/CI path.*
+
+Added `backend/app/llm_client.py`, one shared `complete()` function every
+agent now calls through (consolidating six copies of the same
+Anthropic-client boilerplate in the process). `LOCAL_LLM=true` (unset by
+default) routes every call to a local Ollama model instead of Anthropic
+-- the real, documented stack stays Anthropic, tiered by role, exactly as
+`CLAUDE.md`/`PLAN.md` §14 describe. This exists only because the
+project's Anthropic key ran out of credits; it is not an architecture
+decision.
+
+Two real things found while building this, written down so they don't
+get rediscovered the hard way:
+
+- Ollama's API has **no forced tool-choice** at all (`ollama.chat()`
+  takes no `tool_choice` parameter) -- this project's entire tool-calling
+  pattern (`router.py`, `majors_intake.py`, `eval/judge.py`) depends on
+  Anthropic's forced choice. Ollama's `format=<json_schema>` constrained-
+  generation parameter is the substitute, reusing each tool's existing
+  `input_schema` unchanged.
+- Confirmed, concrete accuracy gap, not just a theoretical caveat: tested
+  directly against `qwen2.5:7b-instruct` using this project's real
+  schemas. The router correctly classified 3/3 test questions (including
+  a genuine multi-domain one, which also correctly fanned out and
+  synthesized end to end), but Majors' extraction silently dropped an
+  explicitly-stated in-progress course from a nested array -- a case
+  Claude already handles correctly (Phase 3 scenario G). A smaller model
+  (`llama3.2`, 3B) did meaningfully worse, misrouting all 3 test
+  questions to `unclear`. **This fallback is for exercising code paths
+  under `LOCAL_LLM=true`, not for trusting local-model output as
+  equivalent evidence of answer quality or safety behavior** -- any eval
+  gate result produced this way should be labeled as such, not treated
+  like a real Claude-based run.
+
+**Also found and fixed along the way, unrelated to the above but
+blocking all local testing regardless of provider:** the project's venv
+was created from Anaconda's base Python, which had since been updated
+independently (3.13.5 -> 3.13.9) without the venv being recreated --
+silently breaking every compiled C-extension dependency's ABI
+compatibility (`chromadb`'s Rust bindings, then `torch`'s dylib loading),
+surfacing as import-time crashes or, in one case, a hang that looked like
+a resource/lock issue but wasn't. Fixed by deleting and recreating the
+venv from scratch and reinstalling `requirements.txt` -- exactly what
+the README's own Setup section already instructs, so this is a real
+repair, not a workaround. Worth remembering if local testing mysteriously
+breaks again after any system/Python update.

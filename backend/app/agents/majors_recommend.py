@@ -1,21 +1,11 @@
-import os
 import re
 
-import anthropic
 from langgraph.types import interrupt
 
 from app.config.competitive_majors import CompetitiveMajor, match_competitive_major
 from app.graph.app_state import AppState
+from app.llm_client import complete
 from app.retrieval.chroma_client import query_domain
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
 
 
 DECLARE_SYSTEM_TEMPLATE = """A University of Memphis student wants to switch
@@ -34,11 +24,11 @@ def _declare_path(target_major: str) -> dict:
         f"[Source: {h['metadata']['source_url']}]\n{h['text']}" for h in hits
     )
 
-    response = _get_client().messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=400,
+    response = complete(
         system=DECLARE_SYSTEM_TEMPLATE.format(major=target_major, context=context),
         messages=[{"role": "user", "content": f"How do I switch to {target_major}?"}],
+        model="claude-sonnet-4-5",
+        max_tokens=400,
     )
 
     return {
@@ -49,7 +39,7 @@ def _declare_path(target_major: str) -> dict:
             "sources": sources,
         },
         "recommendation_confirmed": True,
-        "answer": response.content[0].text,
+        "answer": response.text,
         "sources": sources,
         # So the shared guardrails node can run the same confidence gate a
         # Tier-1 domain question gets -- this path retrieves too, and had
@@ -229,9 +219,7 @@ def _competitive_path(
         # verdict anyway after the student asked to wait would make the
         # interrupt() pure theater. No eligibility facts in this prompt on
         # purpose: there is nothing to soften if the model never sees them.
-        response = _get_client().messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=200,
+        response = complete(
             system=(
                 "A student asked you to hold off on finalizing an eligibility "
                 "read so they can work on their numbers first. Acknowledge "
@@ -240,11 +228,13 @@ def _competitive_path(
                 "imply any eligibility verdict."
             ),
             messages=[{"role": "user", "content": str(decision)}],
+            model="claude-sonnet-4-5",
+            max_tokens=200,
         )
         return {
             "recommendation": recommendation,
             "recommendation_confirmed": False,
-            "answer": response.content[0].text,
+            "answer": response.text,
         }
 
     required_display = ", ".join(
@@ -271,9 +261,7 @@ Student's reported courses: {completed_courses}
 Eligibility read: {band}
 """
 
-    response = _get_client().messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=500,
+    response = complete(
         system=(
             f"Compose a clear, honest answer for a student asking about "
             f"applying to {major.display_name}, a real competitive UofM "
@@ -295,12 +283,14 @@ Eligibility read: {band}
         messages=[
             {"role": "user", "content": f"Am I eligible to apply for {major.display_name}?"}
         ],
+        model="claude-sonnet-4-5",
+        max_tokens=500,
     )
 
     return {
         "recommendation": recommendation,
         "recommendation_confirmed": recommendation_confirmed,
-        "answer": response.content[0].text,
+        "answer": response.text,
         "sources": recommendation["sources"],
     }
 
