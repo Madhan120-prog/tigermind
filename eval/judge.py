@@ -7,18 +7,7 @@ substring matching would false-fail a correctly-phrased-differently
 answer. A forced tool-call verdict (the same pattern already used by
 majors_intake.py and router.py) compares meaning, not wording.
 """
-import os
-
-import anthropic
-
-_client = None
-
-
-def _get_client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    return _client
+from app.llm_client import complete
 
 
 JUDGE_TOOL = {
@@ -61,20 +50,17 @@ cases calling out exactly what a wrong answer would claim)."""
 
 def judge(question: str, expected: str, actual: str) -> tuple[str, str]:
     """Returns (verdict, reason) -- verdict is 'pass' or 'fail'."""
-    response = _get_client().messages.create(
-        model="claude-haiku-4-5",
-        max_tokens=200,
+    response = complete(
         system=JUDGE_SYSTEM,
-        tools=[JUDGE_TOOL],
-        tool_choice={"type": "tool", "name": "judge_answer"},
         messages=[
             {
                 "role": "user",
                 "content": f"Question: {question}\n\nExpected answer: {expected}\n\nActual answer: {actual}",
             }
         ],
+        model="claude-haiku-4-5",
+        max_tokens=200,
+        tool=JUDGE_TOOL,
     )
-    result = next(
-        block.input for block in response.content if block.type == "tool_use"
-    )
+    result = response.tool_input
     return result["verdict"], result["reason"]
